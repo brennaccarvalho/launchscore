@@ -12,9 +12,10 @@ import plotly.graph_objects as go
 import streamlit as st
 import streamlit.components.v1 as components
 
-from config import CORES, CORES_CANAIS, TERMOS_USO_RESUMIDOS
+from config import CORES, CORES_CANAIS
 from modules.audience import gerar_perfil_publico
 from modules.budget_engine import calcular_verba, calcular_vgv
+from modules.data_orchestrator import FONTES_DE_DADOS, calcular_favorabilidade_mercado, coletar_todos_dados
 from modules.ibge_api import (
     buscar_municipio_por_nome,
     get_dados_ibge,
@@ -25,6 +26,7 @@ from modules.ibge_api import (
 from modules.media_mix import recomendar_mix
 from modules.report_generator import gerar_pdf
 from modules.score_engine import calcular_score
+from modules.termos_de_uso import AUTORA, LINKEDIN, exibir_footer_termos, exibir_termos_modal
 
 
 st.set_page_config(layout="wide", page_title="LaunchScore")
@@ -113,6 +115,32 @@ def render_header() -> None:
     )
 
 
+def render_header_executive() -> None:
+    st.markdown(
+        """
+<div style="background:linear-gradient(135deg,#16233D,#24365F); padding:28px 32px; border-radius:14px; margin-bottom:24px; border:1px solid rgba(232,160,32,0.25); box-shadow:0 10px 30px rgba(27,42,74,0.10);">
+  <div style="display:flex; align-items:flex-start; justify-content:space-between; gap:24px;">
+    <div>
+      <div style="display:inline-block; font-size:0.76rem; font-weight:700; letter-spacing:0.12em; color:#E8A020; text-transform:uppercase; margin-bottom:10px;">
+        Inteligencia de lancamento imobiliario
+      </div>
+      <h1 style="color:#FFFFFF; margin:0; font-size:2rem; font-weight:800; line-height:1.08;">LaunchScore</h1>
+      <p style="color:#D8DEE9; margin:8px 0 0 0; font-size:0.96rem; max-width:720px;">
+        Score comercial, verba recomendada, projecao de cenarios e mix de midia em leitura executiva.
+      </p>
+    </div>
+    <div style="min-width:220px; text-align:right;">
+      <div style="font-size:0.78rem; color:#E8A020; font-weight:700; text-transform:uppercase; letter-spacing:0.08em;">Autoria</div>
+      <div style="font-size:1rem; color:#FFFFFF; font-weight:700; margin-top:4px;">Brenna Carvalho</div>
+      <div style="font-size:0.84rem; color:#C7D2E2; margin-top:4px;">Metodologia proprietaria LaunchScore</div>
+    </div>
+  </div>
+</div>
+        """,
+        unsafe_allow_html=True,
+    )
+
+
 def formatar_moeda(valor: float) -> str:
     return f"R$ {valor:,.0f}".replace(",", ".")
 
@@ -123,6 +151,20 @@ def formatar_percentual(valor: float) -> str:
 
 def formatar_roas(valor: float) -> str:
     return f"{valor:.1f} : 1".replace(".", ",")
+
+
+def formatar_valor_contexto(valor: float | int | None, formato: str = "numero") -> str:
+    if valor is None:
+        return "Indisponivel"
+    if formato == "pct":
+        return f"{float(valor):.1f}%".replace(".", ",")
+    if formato == "bilhoes":
+        return f"R$ {float(valor):.1f} bi".replace(".", ",")
+    if formato == "indice":
+        return f"{float(valor):.2f}".replace(".", ",")
+    if formato == "moeda":
+        return formatar_moeda(float(valor))
+    return f"{float(valor):.2f}".replace(".", ",")
 
 
 def badge_html(texto: str, cor: str) -> str:
@@ -321,21 +363,6 @@ def render_copy_button(texto: str) -> None:
     )
 
 
-@st.dialog("Termos de Uso")
-def mostrar_termos_dialogo() -> None:
-    st.markdown("### Termos de Uso")
-    st.write(TERMOS_USO_RESUMIDOS)
-    st.markdown(
-        """
-**Clausulas de propriedade intelectual**
-
-- A metodologia de score, os algoritmos de calculo e a interface da plataforma sao propriedade intelectual da autora.
-- O uso comercial, redistribuicao ou reproducao dependem de autorizacao expressa.
-- Os resultados nao substituem analise financeira, comercial ou juridica independente.
-        """
-    )
-
-
 def render_sidebar() -> None:
     with st.sidebar:
         st.markdown(
@@ -370,8 +397,8 @@ def render_sidebar() -> None:
         for termo, definicao in glossario.items():
             with st.expander(f"**{termo}**"):
                 st.write(definicao)
-        if st.button("📄 Ver Termos de Uso", use_container_width=True):
-            mostrar_termos_dialogo()
+        st.markdown("---")
+        exibir_termos_modal()
         if "historico" in st.session_state and st.session_state["historico"]:
             st.markdown("---")
             st.markdown("### Analises recentes")
@@ -380,18 +407,6 @@ def render_sidebar() -> None:
                     f"- **{item['nome']}** ({item['cidade']})  \n"
                     f"Score {item['score']}/100 | Verba base {item['verba']}"
                 )
-        st.markdown("---")
-        st.markdown(
-            """
-        <div style="font-size:0.72rem; color:#9CA3AF; text-align:center; padding:8px;">
-          © 2026 Brenna Carvalho<br>
-          LaunchScore - Todos os direitos reservados<br>
-          <a href="https://www.linkedin.com/in/brennacarvalho/" target="_blank" style="color:#E8A020;">LinkedIn</a> ·
-          <span style="color:#E8A020;">Termos de Uso</span>
-        </div>
-            """,
-            unsafe_allow_html=True,
-        )
 
 
 def preparar_historico(resultados: dict) -> None:
@@ -451,7 +466,12 @@ def processar_dados(form_data: dict) -> dict:
         localizacao = buscar_municipio_por_nome(form_data["cidade_manual"])
 
     progresso.progress(35, text=mensagens[0].replace("municipio", localizacao["municipio"]))
-    dados_ibge = get_dados_ibge(localizacao["codigo_ibge"])
+    dados_publicos = coletar_todos_dados(
+        localizacao["codigo_ibge"],
+        localizacao["municipio"],
+        form_data["tipologia"],
+    )
+    dados_ibge = dados_publicos["ibge"]
     dados_normalizados = normalizar_para_score(dados_ibge)
     sugestao_localizacao = sugerir_pontuacao_localizacao(localizacao, dados_ibge)
 
@@ -467,7 +487,13 @@ def processar_dados(form_data: dict) -> dict:
         )
     }
     progresso.progress(52, text=mensagens[1])
-    resultado_score = calcular_score(dados_normalizados, atributos)
+    resultado_score = calcular_score(
+        dados_normalizados,
+        atributos,
+        dados_bcb=dados_publicos["bcb"],
+        dados_ipea=dados_publicos["ipea"],
+        dados_trends=dados_publicos["trends"],
+    )
 
     vgv = calcular_vgv(form_data["valor_unidade"], form_data["volume_unidades"])
     progresso.progress(68, text=mensagens[2])
@@ -496,11 +522,14 @@ def processar_dados(form_data: dict) -> dict:
 
     progresso.progress(100, text=mensagens[5])
     qualidade_texto, qualidade_cor = calcular_qualidade_dados(dados_ibge)
+    contexto = resultado_score.get("justificativa_macro", []) + resultado_score.get("justificativa_mercado_local", [])
     recomendacoes = (
         f"{resultado_score['justificativa_texto']} "
         f"O cenario base concentra {formatar_moeda(resultado_verba['cenarios']['base']['verba_r$'])} "
         f"em uma faixa considerada {resultado_verba['cenarios']['base']['benchmark_comparacao'].lower()} para o setor."
     )
+    if contexto:
+        recomendacoes += " Contexto de mercado: " + " | ".join(contexto) + "."
     return {
         "empreendimento": {
             "nome": form_data.get("nome_empreendimento") or "Empreendimento analisado",
@@ -510,6 +539,7 @@ def processar_dados(form_data: dict) -> dict:
         },
         "localizacao": localizacao,
         "dados_ibge": dados_ibge,
+        "dados_publicos": dados_publicos,
         "dados_normalizados": dados_normalizados,
         "resultado_score": resultado_score,
         "resultado_verba": resultado_verba,
@@ -536,6 +566,12 @@ def render_kpis(resultados: dict) -> None:
         badge_html(score["classificacao"], score["cor"]),
         unsafe_allow_html=True,
     )
+    if score.get("ajuste_macro") or score.get("ajuste_mercado_local"):
+        st.caption(
+            f"Score base: {score.get('score_base', score['score_final'])}/100 | "
+            f"Ajuste macro: {score.get('ajuste_macro', 0):+.1f} | "
+            f"Ajuste mercado local: {score.get('ajuste_mercado_local', 0):+.1f}"
+        )
 
     fig_gauge = go.Figure(
         go.Indicator(
@@ -561,6 +597,35 @@ def render_kpis(resultados: dict) -> None:
         margin=dict(l=20, r=20, t=20, b=20),
     )
     st.plotly_chart(fig_gauge, use_container_width=True)
+
+
+def render_contexto_macro_kpis(resultados: dict) -> None:
+    dados_bcb = resultados["dados_publicos"]["bcb"]
+    col1, col2, col3, col4 = st.columns(4)
+    col1.metric("Selic", formatar_valor_contexto(dados_bcb.get("selic", {}).get("valor"), "pct"))
+    col2.metric(
+        "Juros Imobiliario",
+        formatar_valor_contexto(dados_bcb.get("juros_imobiliario", {}).get("valor"), "pct"),
+    )
+    col3.metric(
+        "Credito Imobiliario",
+        formatar_valor_contexto(dados_bcb.get("concessoes_credito", {}).get("valor"), "bilhoes"),
+    )
+    col4.metric("INCC-DI", formatar_valor_contexto(dados_bcb.get("incc", {}).get("valor"), "pct"))
+
+
+def _texto_impacto_bcb(chave: str, valor: float | None) -> str:
+    if valor is None:
+        return "Sem leitura recente disponivel para interpretacao automatica."
+    if chave == "selic":
+        return "Juros mais baixos tendem a facilitar a decisao do comprador." if valor < 10 else "Juros altos tornam o credito mais seletivo e podem alongar a venda."
+    if chave == "juros_imobiliario":
+        return "Financiamento mais acessivel ajuda a converter ticket medio." if valor < 9 else "Custo do financiamento ainda pressiona a conversao do comprador."
+    if chave == "ivg_r":
+        return "Preco de imoveis em alta reforca percepcao de valorizacao." if valor > 0 else "Mercado sem sinal forte de valorizacao recente."
+    if chave == "incc":
+        return "Custo de obra moderado ajuda o empreendedor a preservar margem." if valor < 8 else "Custo de construcao em alta pressiona margem e precificacao."
+    return "Indicador usado como contexto macro do mercado imobiliario."
 
 
 def render_tab_score(resultados: dict) -> None:
@@ -599,12 +664,45 @@ def render_tab_score(resultados: dict) -> None:
             )
 
 
+    justificativas = resultados["resultado_score"].get("justificativa_macro", []) + resultados["resultado_score"].get("justificativa_mercado_local", [])
+    if justificativas:
+        st.markdown("### Ajustes Contextuais")
+        for texto in justificativas:
+            st.markdown(f"- {texto}")
+
+
 def render_tab_cenarios(resultados: dict) -> None:
+    cenarios = resultados["resultado_verba"]["cenarios"]
+    cols = st.columns(3)
+    meta = {
+        "conservador": ("🔵 Conservador", "#DBEAFE"),
+        "base": ("⚡ Base", "#FEF3C7"),
+        "agressivo": ("🔴 Agressivo", "#FEE2E2"),
+    }
+    for idx, nome in enumerate(("conservador", "base", "agressivo")):
+        dados = cenarios[nome]
+        titulo, fundo = meta[nome]
+        with cols[idx]:
+            st.markdown(
+                f"""
+                <div style="background:{fundo}; border:1px solid #E5DDD0; border-radius:12px; padding:16px; min-height:220px;">
+                  <div style="font-weight:800; color:#1B2A4A; margin-bottom:8px;">{titulo}</div>
+                  <div style="font-size:1.4rem; font-weight:800; color:#1B2A4A;">{formatar_moeda(dados['verba_r$'])}</div>
+                  <div style="color:#6B7280; font-size:0.85rem; margin-bottom:10px;">{formatar_percentual(dados['percentual'])} do VGV</div>
+                  <div style="font-size:0.92rem; color:#1B2A4A;"><strong>Leads:</strong> {dados['leads_estimados']:.0f}</div>
+                  <div style="font-size:0.92rem; color:#1B2A4A;"><strong>Vendas estimadas:</strong> {dados['vendas_estimadas']:.1f}</div>
+                  <div style="font-size:0.92rem; color:#1B2A4A;"><strong>ROAS:</strong> {formatar_roas(dados['roas'])}</div>
+                  <div style="margin-top:10px; color:#6B7280; font-size:0.82rem;">{dados['resultado_esperado']}</div>
+                </div>
+                """,
+                unsafe_allow_html=True,
+            )
+
     df_tabela = montar_tabela_cenarios(resultados)
     st.dataframe(df_tabela, use_container_width=True, hide_index=True)
 
     linhas = []
-    for nome, dados in resultados["resultado_verba"]["cenarios"].items():
+    for nome, dados in cenarios.items():
         linhas.extend(
             [
                 {"Cenario": nome.capitalize(), "Indicador": "Verba", "Valor": dados["verba_r$"]},
@@ -617,8 +715,16 @@ def render_tab_cenarios(resultados: dict) -> None:
     st.plotly_chart(fig, use_container_width=True)
 
 
-def render_mix_cenario(mix: dict) -> None:
+def render_mix_cenario(nome_cenario: str, mix: dict) -> None:
     canais = mix["canais"]
+    total_budget = sum(dados["budget_r$"] for dados in canais.values())
+    total_leads = sum(dados["leads_estimados"] for dados in canais.values())
+    canal_lider = max(canais.items(), key=lambda item: item[1]["budget_r$"])[0]
+    col_a, col_b, col_c = st.columns(3)
+    col_a.metric("Budget do cenario", formatar_moeda(total_budget))
+    col_b.metric("Leads estimados", f"{total_leads:.0f}")
+    col_c.metric("Canal lider", canal_lider)
+
     df_mix = pd.DataFrame(
         [
             {
@@ -641,8 +747,13 @@ def render_mix_cenario(mix: dict) -> None:
             color="Canal",
             color_discrete_map=CORES_CANAIS,
         )
-        fig.update_layout(paper_bgcolor=CORES["fundo"], plot_bgcolor=CORES["fundo"])
-        st.plotly_chart(fig, use_container_width=True)
+        fig.update_layout(
+            paper_bgcolor=CORES["fundo"],
+            plot_bgcolor=CORES["fundo"],
+            legend_title_text="Canais",
+            margin=dict(l=10, r=10, t=20, b=10),
+        )
+        st.plotly_chart(fig, use_container_width=True, key=f"mix_pizza_{nome_cenario}")
     with cols[1]:
         df_show = df_mix.copy()
         df_show["%"] = df_show["%"].map(lambda x: f"{x:.1f}%")
@@ -650,23 +761,32 @@ def render_mix_cenario(mix: dict) -> None:
         df_show["CPL Est."] = df_show["CPL Est."].map(formatar_moeda)
         df_show["Leads Est."] = df_show["Leads Est."].map(lambda x: f"{x:.0f}")
         st.dataframe(df_show, use_container_width=True, hide_index=True)
-    for canal, dados in canais.items():
-        with st.expander(f"{dados['icone']} {canal}"):
-            st.markdown(
-                f"**Budget:** {formatar_moeda(dados['budget_r$'])} | "
-                f"**Participacao:** {dados['percentual']:.1f}% | "
-                f"**CPL:** {formatar_moeda(dados['cpl_estimado'])} | "
-                f"**Leads esperados:** {dados['leads_estimados']:.0f}"
+    st.markdown("### Canais Prioritarios")
+    cards = st.columns(2)
+    for idx, (canal, dados) in enumerate(sorted(canais.items(), key=lambda item: item[1]["budget_r$"], reverse=True)):
+        with cards[idx % 2]:
+            conteudo = (
+                f"<p style='margin:0 0 8px 0;'><strong>Budget:</strong> {formatar_moeda(dados['budget_r$'])} "
+                f"({dados['percentual']:.1f}%)</p>"
+                f"<p style='margin:0 0 8px 0;'><strong>CPL:</strong> {formatar_moeda(dados['cpl_estimado'])} | "
+                f"<strong>Leads:</strong> {dados['leads_estimados']:.0f}</p>"
+                + "".join(f"<p style='margin:0 0 6px 0;'>• {tatica}</p>" for tatica in dados["taticas"])
             )
-            for tatica in dados["taticas"]:
-                st.write(f"- {tatica}")
+            card(canal, conteudo, cor_borda=dados["cor"], icone=dados["icone"])
 
 
 def render_tab_mix(resultados: dict) -> None:
-    expander_flags = {"conservador": False, "base": True, "agressivo": False}
-    for nome in ("conservador", "base", "agressivo"):
-        with st.expander(f"Cenario {nome.capitalize()}", expanded=expander_flags[nome]):
-            render_mix_cenario(resultados["mix_midias"][nome])
+    st.markdown(
+        "<p style='color:#6B7280;'>Cada aba mostra a distribuicao recomendada de budget, os canais lideres e o potencial de geracao de leads por cenario.</p>",
+        unsafe_allow_html=True,
+    )
+    tab_cons, tab_base, tab_agr = st.tabs(["🔵 Conservador", "⚡ Base (Recomendado)", "🔴 Agressivo"])
+    with tab_cons:
+        render_mix_cenario("conservador", resultados["mix_midias"]["conservador"])
+    with tab_base:
+        render_mix_cenario("base", resultados["mix_midias"]["base"])
+    with tab_agr:
+        render_mix_cenario("agressivo", resultados["mix_midias"]["agressivo"])
 
 
 def render_tab_publico(resultados: dict) -> None:
@@ -720,7 +840,68 @@ def render_tab_publico(resultados: dict) -> None:
         )
 
 
+def render_tab_contexto_mercado(resultados: dict) -> None:
+    dados_publicos = resultados["dados_publicos"]
+    dados_bcb = dados_publicos["bcb"]
+    dados_ipea = dados_publicos["ipea"]
+    dados_trends = dados_publicos["trends"]
+    favorabilidade = calcular_favorabilidade_mercado(dados_bcb, dados_ipea, dados_trends)
+
+    st.markdown("### Cenário Macroeconômico Atual")
+    render_contexto_macro_kpis(resultados)
+    macro_cols = st.columns(3)
+    cards_macro = [
+        ("Selic", dados_bcb.get("selic", {}).get("valor"), "pct", _texto_impacto_bcb("selic", dados_bcb.get("selic", {}).get("valor"))),
+        ("Juros Financiamento", dados_bcb.get("juros_imobiliario", {}).get("valor"), "pct", _texto_impacto_bcb("juros_imobiliario", dados_bcb.get("juros_imobiliario", {}).get("valor"))),
+        ("IVG-R", dados_bcb.get("ivg_r", {}).get("valor"), "indice", _texto_impacto_bcb("ivg_r", dados_bcb.get("ivg_r", {}).get("valor"))),
+    ]
+    for idx, (titulo, valor, formato, texto) in enumerate(cards_macro):
+        with macro_cols[idx]:
+            card(
+                titulo,
+                f"<p style='font-size:1.25rem; font-weight:800; color:#1B2A4A;'>{formatar_valor_contexto(valor, formato)}</p><p style='margin:0; color:#6B7280;'>{texto}</p>",
+                cor_borda="#D6C5A0",
+                icone="📊",
+            )
+
+    st.markdown("### Contexto Local")
+    local_cols = st.columns(4)
+    local_cols[0].metric("PIB per capita", formatar_valor_contexto(dados_ipea.get("pib_percapita", {}).get("valor"), "moeda"))
+    local_cols[1].metric("Gini", formatar_valor_contexto(dados_ipea.get("gini", {}).get("valor"), "indice"))
+    local_cols[2].metric("Desemprego", formatar_valor_contexto(dados_ipea.get("desemprego", {}).get("valor"), "pct"))
+    local_cols[3].metric("IDHM", formatar_valor_contexto(dados_publicos["idhm"].get("idhm"), "indice"))
+
+    st.markdown("### Demanda Digital")
+    tendencia = dados_trends.get("tendencia_recente", "indisponivel")
+    badge = "badge-verde" if tendencia == "crescendo" else "badge-amarelo" if tendencia == "estavel" else "badge-vermelho"
+    st.markdown(f"<span class='{badge}'>Tendência: {tendencia.title()}</span>", unsafe_allow_html=True)
+    serie = dados_trends.get("serie_interesse", [])
+    if serie:
+        df_trends = pd.DataFrame(serie)
+        fig = px.line(df_trends, x="data", y="interesse", markers=True, title="Interesse de busca nos últimos 12 meses")
+        fig.update_layout(paper_bgcolor=CORES["fundo"], plot_bgcolor=CORES["fundo"], height=320)
+        st.plotly_chart(fig, use_container_width=True)
+    else:
+        st.info("Google Trends indisponível no momento. O score usa fallback neutro quando essa fonte nao responde.")
+
+    st.markdown("### Índice de Favorabilidade do Mercado")
+    col_a, col_b = st.columns([1, 2])
+    col_a.metric("Favorabilidade", f"{favorabilidade['score']}/10")
+    col_b.markdown(
+        f"<div style='padding-top:8px; font-size:1rem; font-weight:700; color:#1B2A4A;'>{favorabilidade['classificacao']}</div>"
+        f"<div style='color:#6B7280; margin-top:6px;'>Leitura combinada de juros, emprego e demanda digital para avaliar o timing do lançamento.</div>",
+        unsafe_allow_html=True,
+    )
+
+
 def render_tab_ibge(resultados: dict) -> None:
+    st.markdown("### Fontes de Dados Utilizadas")
+    df_fontes = pd.DataFrame(FONTES_DE_DADOS)
+    df_fontes["gratuita"] = df_fontes["gratuita"].map(lambda x: "Sim" if x else "Nao")
+    df_fontes["requer_key"] = df_fontes["requer_key"].map(lambda x: "Sim" if x else "Nao")
+    st.dataframe(df_fontes, use_container_width=True, hide_index=True)
+
+    st.markdown("### Dados Municipais e Normalizacao")
     linhas = []
     for chave, dados in resultados["dados_ibge"].items():
         if chave == "codigo_ibge":
@@ -751,29 +932,68 @@ def render_tab_ibge(resultados: dict) -> None:
             }
         )
     df_ibge = pd.DataFrame(linhas)
+    reais = (df_ibge["Confiabilidade"] == "REAL").sum()
+    estimativas = (df_ibge["Confiabilidade"] == "ESTIMATIVA").sum()
+    col1, col2, col3 = st.columns(3)
+    col1.metric("Indicadores utilizados", f"{len(df_ibge)}")
+    col2.metric("Dados reais", f"{reais}")
+    col3.metric("Estimativas", f"{estimativas}")
     st.dataframe(df_ibge, use_container_width=True, hide_index=True)
 
+    st.markdown("### Novas Fontes Complementares")
+    complementares = [
+        {
+            "Fonte": "BCB/SGS",
+            "Resumo": formatar_valor_contexto(resultados["dados_publicos"]["bcb"].get("selic", {}).get("valor"), "pct"),
+            "Status": resultados["dados_publicos"]["bcb"].get("selic", {}).get("fonte"),
+        },
+        {
+            "Fonte": "Ipeadata",
+            "Resumo": formatar_valor_contexto(resultados["dados_publicos"]["ipea"].get("pib_percapita", {}).get("valor"), "moeda"),
+            "Status": resultados["dados_publicos"]["ipea"].get("pib_percapita", {}).get("fonte"),
+        },
+        {
+            "Fonte": "Atlas Brasil",
+            "Resumo": formatar_valor_contexto(resultados["dados_publicos"]["idhm"].get("idhm"), "indice"),
+            "Status": resultados["dados_publicos"]["idhm"].get("fonte"),
+        },
+        {
+            "Fonte": "Google Trends",
+            "Resumo": str(resultados["dados_publicos"]["trends"].get("score_interesse", 50)),
+            "Status": resultados["dados_publicos"]["trends"].get("fonte"),
+        },
+    ]
+    st.dataframe(pd.DataFrame(complementares), use_container_width=True, hide_index=True)
+
     df_heat = montar_breakdown_df(resultados["resultado_score"])[["Variavel", "Contribuicao"]]
-    fig_heat = px.imshow(
-        [df_heat["Contribuicao"].tolist()],
-        x=df_heat["Variavel"].tolist(),
-        y=["Peso no score"],
+    fig_heat = px.bar(
+        df_heat.sort_values("Contribuicao", ascending=False),
+        x="Contribuicao",
+        y="Variavel",
+        orientation="h",
+        color="Contribuicao",
         color_continuous_scale=["#FAF8F5", "#E8A020", "#1B2A4A"],
-        aspect="auto",
+        title="Variaveis com maior peso no score",
     )
-    fig_heat.update_layout(paper_bgcolor=CORES["fundo"], plot_bgcolor=CORES["fundo"], height=260)
-    st.plotly_chart(fig_heat, use_container_width=True)
+    fig_heat.update_layout(
+        paper_bgcolor=CORES["fundo"],
+        plot_bgcolor=CORES["fundo"],
+        height=320,
+        coloraxis_showscale=False,
+    )
+    st.plotly_chart(fig_heat, use_container_width=True, key="ibge_peso_score")
 
 
 def render_dashboard(resultados: dict) -> None:
     render_kpis(resultados)
-    tab1, tab2, tab3, tab4, tab5 = st.tabs(
+    tab1, tab2, tab3, tab4, tab5, tab6 = st.tabs(
         [
             "📊 Score Detalhado",
             "💰 Projecao de Cenarios",
             "📡 Mix de Midia",
             "👥 Publico-Alvo",
-            "📋 Dados IBGE Utilizados",
+            "📈 Contexto de Mercado",
+            "📋 Dados Utilizados",
         ]
     )
     with tab1:
@@ -785,6 +1005,8 @@ def render_dashboard(resultados: dict) -> None:
     with tab4:
         render_tab_publico(resultados)
     with tab5:
+        render_tab_contexto_mercado(resultados)
+    with tab6:
         render_tab_ibge(resultados)
 
     st.subheader("Exportar Relatorio")
@@ -799,28 +1021,106 @@ def render_dashboard(resultados: dict) -> None:
     render_copy_button(montar_resumo_compartilhamento(resultados))
 
 
-def render_footer() -> None:
-    st.markdown("---")
+def secao_resultado(titulo: str, subtitulo: str | None = None) -> None:
     st.markdown(
-        """
-<div style="background:#F0EDE8; border:1px solid #E5DDD0; border-radius:8px;
-            padding:16px 24px; font-size:0.78rem; color:#6B7280; text-align:center;">
-  <strong style="color:#1B2A4A;">LaunchScore</strong> e uma criacao de
-  <strong style="color:#1B2A4A;">Brenna Carvalho</strong>. Todos os direitos reservados.<br>
-  A metodologia de score, os algoritmos de calculo e a interface desta plataforma sao propriedade intelectual da autora.<br>
-  O uso desta plataforma implica aceite dos <span style="color:#E8A020; font-weight:600;">Termos de Uso</span> ·
-  <a href="https://www.linkedin.com/in/brennacarvalho/" target="_blank" style="color:#E8A020; font-weight:600;">LinkedIn</a>.
-  Os resultados tem carater orientativo e nao constituem garantia de resultados financeiros.
-</div>
+        f"""
+        <div style="margin:28px 0 14px 0;">
+          <div style="font-size:0.78rem; font-weight:700; letter-spacing:0.10em; text-transform:uppercase; color:#E8A020; margin-bottom:6px;">
+            Leitura executiva
+          </div>
+          <div style="font-size:1.45rem; font-weight:800; color:#1B2A4A;">{titulo}</div>
+          {f'<div style="font-size:0.95rem; color:#6B7280; margin-top:6px; max-width:920px;">{subtitulo}</div>' if subtitulo else ''}
+        </div>
         """,
         unsafe_allow_html=True,
     )
 
 
+def render_dashboard_story(resultados: dict) -> None:
+    score = resultados["resultado_score"]
+    base = resultados["resultado_verba"]["cenarios"]["base"]
+
+    secao_resultado(
+        "1. Resumo do caso",
+        "Comece aqui: este bloco resume a situacao comercial do empreendimento e qual intensidade de investimento faz mais sentido como ponto de partida.",
+    )
+    st.markdown("### Cenário Macroeconômico Atual")
+    render_contexto_macro_kpis(resultados)
+    render_kpis(resultados)
+    st.markdown(
+        f"""
+        <div style="background:#FFFFFF; border:1px solid #E5DDD0; border-radius:12px; padding:18px 20px; box-shadow:0 2px 8px rgba(27,42,74,0.05);">
+          <div style="font-size:1rem; font-weight:700; color:#1B2A4A; margin-bottom:8px;">Sintese executiva</div>
+          <div style="font-size:0.95rem; color:#4B5563; line-height:1.65;">
+            O empreendimento <strong>{resultados['empreendimento']['nome']}</strong>, em
+            <strong>{resultados['localizacao']['municipio']} - {resultados['localizacao']['uf']}</strong>,
+            apresenta score de <strong>{score['score_final']}/100</strong>, classificado como
+            <strong>{score['classificacao']}</strong>. O ponto de partida recomendado e o
+            <strong>cenario base</strong>, com investimento de <strong>{formatar_moeda(base['verba_r$'])}</strong>,
+            equivalente a <strong>{formatar_percentual(base['percentual'])}</strong> do VGV.
+          </div>
+        </div>
+        """,
+        unsafe_allow_html=True,
+    )
+
+    secao_resultado(
+        "2. O que explica o score",
+        "Esta etapa mostra os fatores que mais pesam na dificuldade de venda e onde a estrategia precisa agir primeiro.",
+    )
+    render_tab_score(resultados)
+
+    secao_resultado(
+        "3. Quanto investir",
+        "Agora a leitura financeira fica clara: compare conservador, base e agressivo como alternativas de intensidade comercial.",
+    )
+    render_tab_cenarios(resultados)
+
+    secao_resultado(
+        "4. Onde alocar a verba",
+        "Depois da decisao de investimento, a distribuicao entre canais mostra quais frentes lideram a estrategia em cada cenario.",
+    )
+    render_tab_mix(resultados)
+
+    secao_resultado(
+        "5. Para quem comunicar",
+        "Com a verba e os canais definidos, o proximo passo e alinhar mensagem, objecoes e tom comercial ao publico mais aderente ao ticket e ao contexto local.",
+    )
+    render_tab_publico(resultados)
+
+    secao_resultado(
+        "6. Contexto de mercado",
+        "Antes da decisao final, vale ler o pano de fundo macro, local e de demanda digital que pode acelerar ou frear o lancamento.",
+    )
+    render_tab_contexto_mercado(resultados)
+
+    secao_resultado(
+        "7. Evidencias que sustentam a analise",
+        "Aqui ficam os indicadores publicos utilizados, a comparacao com referencias nacionais e a confiabilidade dos dados.",
+    )
+    render_tab_ibge(resultados)
+
+    st.subheader("Exportar Relatorio")
+    pdf_bytes = gerar_pdf(resultados)
+    cidade = resultados["localizacao"]["municipio"].replace(" ", "_").lower()
+    st.download_button(
+        label="Baixar Relatorio Completo em PDF",
+        data=pdf_bytes,
+        file_name=f"launchscore_{cidade}_{date.today()}.pdf",
+        mime="application/pdf",
+    )
+    render_copy_button(montar_resumo_compartilhamento(resultados))
+
+
+def render_footer() -> None:
+    st.markdown("---")
+    exibir_footer_termos()
+
+
 def main() -> None:
     injetar_css()
     render_sidebar()
-    render_header()
+    render_header_executive()
     if "historico" not in st.session_state:
         st.session_state["historico"] = []
 
@@ -898,7 +1198,16 @@ def main() -> None:
                 "Altamente aspiracional",
                 "conexao_luxo",
             )
-            st.markdown("<br>", unsafe_allow_html=True)
+            st.markdown(
+                """
+<p style="font-size:0.75rem; color:#9CA3AF; text-align:center; margin-top:8px;">
+  Ao calcular, voce concorda com os
+  <span style="color:#E8A020;">Termos de Uso</span> da plataforma.
+</p>
+<br>
+                """,
+                unsafe_allow_html=True,
+            )
             calcular = st.button("🚀 Calcular Score e Gerar Relatorio", type="primary", use_container_width=True)
             st.markdown("</div>", unsafe_allow_html=True)
 
@@ -950,7 +1259,7 @@ def main() -> None:
 
     with tabs[2]:
         if "resultados" in st.session_state:
-            render_dashboard(st.session_state["resultados"])
+            render_dashboard_story(st.session_state["resultados"])
         else:
             st.info("Ainda nao ha resultados para exibir.")
 

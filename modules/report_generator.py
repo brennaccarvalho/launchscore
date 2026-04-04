@@ -14,9 +14,10 @@ from reportlab.lib import colors
 from reportlab.lib.pagesizes import A4
 from reportlab.lib.styles import ParagraphStyle, getSampleStyleSheet
 from reportlab.lib.units import cm
-from reportlab.platypus import Image, PageBreak, Paragraph, SimpleDocTemplate, Spacer, Table, TableStyle
+from reportlab.platypus import Image, KeepInFrame, PageBreak, Paragraph, SimpleDocTemplate, Spacer, Table, TableStyle
 
-from config import PDF_RODAPE, PESOS_SCORE, TERMOS_USO_RESUMIDOS
+from config import PDF_RODAPE, PESOS_SCORE
+from modules.termos_de_uso import AUTORA, LINKEDIN, TERMOS_COMPLETOS
 
 
 AZUL = colors.Color(0.106, 0.165, 0.290)
@@ -294,9 +295,37 @@ def gerar_pdf(dados_completos: dict) -> bytes:
     story.append(Spacer(1, 0.3 * cm))
     story.append(Paragraph("Aviso legal: este relatorio tem carater orientativo e nao representa garantia de performance comercial ou financeira.", styles["LaunchBody"]))
     story.append(Spacer(1, 0.2 * cm))
-    story.append(Paragraph(TERMOS_USO_RESUMIDOS.replace("\n", "<br/>"), styles["LaunchSmall"]))
-    story.append(Spacer(1, 0.6 * cm))
-    story.append(Paragraph("© Brenna Carvalho - LaunchScore. Todos os direitos reservados.", styles["LaunchSubtitulo"]))
+    story.append(Paragraph("TERMOS DE USO", styles["LaunchH2"]))
+    termos_style = ParagraphStyle(
+        "LaunchTerms",
+        parent=styles["LaunchSmall"],
+        fontName="Courier",
+        fontSize=6.5,
+        leading=9,
+        textColor=colors.HexColor("#555555"),
+    )
+    paragrafo_termos = Paragraph(TERMOS_COMPLETOS.replace("\n", "<br/>"), termos_style)
+    tabela_termos = Table(
+        [[KeepInFrame(16.2 * cm, 13.8 * cm, [paragrafo_termos], mode="shrink")]],
+        colWidths=[16.2 * cm],
+    )
+    tabela_termos.setStyle(
+        TableStyle(
+            [
+                ("BOX", (0, 0), (-1, -1), 0.8, colors.HexColor("#BFB8AC")),
+                ("BACKGROUND", (0, 0), (-1, -1), colors.HexColor("#FAF8F5")),
+                ("LEFTPADDING", (0, 0), (-1, -1), 10),
+                ("RIGHTPADDING", (0, 0), (-1, -1), 10),
+                ("TOPPADDING", (0, 0), (-1, -1), 10),
+                ("BOTTOMPADDING", (0, 0), (-1, -1), 10),
+            ]
+        )
+    )
+    story.append(tabela_termos)
+    story.append(Spacer(1, 0.25 * cm))
+    story.append(Paragraph(f"Autora: {AUTORA} | LinkedIn: {LINKEDIN}", styles["LaunchSmall"]))
+    story.append(Spacer(1, 0.2 * cm))
+    story.append(Paragraph(f"© 2026 {AUTORA} - LaunchScore. Todos os direitos reservados.", styles["LaunchSubtitulo"]))
 
     doc.build(
         story,
