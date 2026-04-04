@@ -1,4 +1,4 @@
-"""Configuracoes globais do Score Marketing Imobiliario."""
+"""Configuracoes globais do LaunchScore."""
 
 from __future__ import annotations
 
@@ -10,6 +10,22 @@ MEDIANAS_NACIONAIS = {
     "crescimento_populacional": 0.0064,
     "escolaridade_superior": 0.18,
     "faixa_etaria_centralidade": 0.55,
+}
+
+CORES = {
+    "fundo": "#FAF8F5",
+    "fundo_card": "#FFFFFF",
+    "fundo_sidebar": "#F0EDE8",
+    "azul_escuro": "#1B2A4A",
+    "dourado": "#E8A020",
+    "dourado_claro": "#F5C84A",
+    "texto_primario": "#1B2A4A",
+    "texto_secundario": "#6B7280",
+    "verde": "#16A34A",
+    "amarelo": "#CA8A04",
+    "laranja": "#EA580C",
+    "vermelho": "#DC2626",
+    "borda": "#E5DDD0",
 }
 
 FAIXA_ECONOMICO_MAX = 500_000
@@ -52,13 +68,57 @@ TABELA_VERBA = {
     },
 }
 
-CORES_RELATORIO = {
-    "azul": "#1B2A4A",
-    "dourado": "#E8A020",
-    "branco": "#FFFFFF",
-    "cinza": "#F3F4F6",
-    "verde": "#22C55E",
-    "amarelo": "#EAB308",
-    "laranja": "#F97316",
-    "vermelho": "#EF4444",
+BENCHMARK_CPL = {
+    "lotes": {"conservador": 180, "base": 140, "agressivo": 110},
+    "apartamentos": {"conservador": 220, "base": 170, "agressivo": 130},
 }
+
+TAXA_CONVERSAO = {
+    "score_0_30": 0.025,
+    "score_31_50": 0.018,
+    "score_51_70": 0.013,
+    "score_71_100": 0.009,
+}
+
+BENCHMARKS_SETOR = {
+    "lotes": {"media_pct_vgv": 0.032, "range": "2,5% - 4,5%"},
+    "apartamentos": {"media_pct_vgv": 0.038, "range": "3,0% - 5,5%"},
+}
+
+CORES_CANAIS = {
+    "Meta Ads (Instagram/Facebook)": "#1B2A4A",
+    "Google Ads (Search + Display)": "#3B82F6",
+    "Portais Imobiliarios (Zap/Viva/OLX)": "#E8A020",
+    "WhatsApp / CRM": "#16A34A",
+    "Midia OOH (outdoor/paineis)": "#EA580C",
+    "Radio Local": "#9333EA",
+    "Influenciadores Regionais": "#EC4899",
+    "Eventos/Plantao Digital": "#F5C84A",
+    "LinkedIn Ads": "#0077B5",
+    "CRM / E-mail Marketing": "#6B7280",
+    "Influenciadores / Conteudo": "#EC4899",
+}
+
+CORES_RELATORIO = {
+    "azul": CORES["azul_escuro"],
+    "dourado": CORES["dourado"],
+    "branco": CORES["fundo_card"],
+    "cinza": CORES["texto_secundario"],
+    "verde": CORES["verde"],
+    "amarelo": CORES["amarelo"],
+    "laranja": CORES["laranja"],
+    "vermelho": CORES["vermelho"],
+}
+
+PDF_RODAPE = (
+    "Criado por Brenna Carvalho | LaunchScore | "
+    "launchscorebrenna.streamlit.app | linkedin.com/in/brennacarvalho"
+)
+
+TERMOS_USO_RESUMIDOS = """
+1. O LaunchScore e sua metodologia sao propriedade intelectual de Brenna Carvalho.
+2. O relatorio possui carater orientativo e nao constitui garantia de resultado financeiro.
+3. O uso comercial, copia integral ou redistribuicao da metodologia depende de autorizacao da autora.
+4. As recomendacoes dependem da qualidade dos dados publicos disponiveis e dos dados inseridos pelo usuario.
+5. Ao utilizar a plataforma, o usuario declara ciencia dessas limitacoes e dos Termos de Uso.
+""".strip()

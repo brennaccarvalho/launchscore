@@ -1,14 +1,14 @@
 """Testes basicos para os motores de score e verba."""
 
-from modules.budget_engine import calcular_verba, calcular_vgv
+from modules.budget_engine import calcular_verba, calcular_vgv, faixa_score
 from modules.score_engine import calcular_score, classificar_score
 
 
 def test_classificar_score_faixas():
-    assert classificar_score(25)[0] == "🟢 Baixa Dificuldade"
-    assert classificar_score(45)[0] == "🟡 Dificuldade Moderada"
-    assert classificar_score(65)[0] == "🟠 Alta Dificuldade"
-    assert classificar_score(85)[0] == "🔴 Dificuldade Crítica"
+    assert classificar_score(25)[0] == "Baixa Dificuldade"
+    assert classificar_score(45)[0] == "Dificuldade Moderada"
+    assert classificar_score(65)[0] == "Alta Dificuldade"
+    assert classificar_score(85)[0] == "Dificuldade Critica"
 
 
 def test_calcular_score_retorna_breakdown_completo():
@@ -37,8 +37,9 @@ def test_calcular_score_retorna_breakdown_completo():
 
 def test_calcular_verba_apartamentos_score_moderado():
     vgv = calcular_vgv(650000, 120)
-    resultado = calcular_verba(vgv, 48, 3, "apartamentos", 120)
+    resultado = calcular_verba(vgv, 48, "apartamentos", 120, 650000)
     assert vgv == 78000000
-    assert round(resultado["percentual_verba"], 4) == 0.0365
-    assert round(resultado["verba_total_r$"], 2) == 2847000.00
-    assert round(resultado["cenarios"]["conservador"]["percentual"], 3) == 0.028
+    assert faixa_score(48) == "score_31_50"
+    assert round(resultado["percentual_verba"], 3) == 0.035
+    assert round(resultado["cenarios"]["base"]["verba_r$"], 2) == 2730000.00
+    assert round(resultado["cenarios"]["base"]["roas"], 2) > 0

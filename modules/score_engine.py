@@ -12,12 +12,12 @@ def _escala_usuario(valor: int, invertido: bool = False) -> float:
 
 def classificar_score(score: float) -> tuple[str, str]:
     if score <= 30:
-        return "🟢 Baixa Dificuldade", "verde"
+        return "Baixa Dificuldade", "verde"
     if score <= 50:
-        return "🟡 Dificuldade Moderada", "amarelo"
+        return "Dificuldade Moderada", "amarelo"
     if score <= 70:
-        return "🟠 Alta Dificuldade", "laranja"
-    return "🔴 Dificuldade Crítica", "vermelho"
+        return "Alta Dificuldade", "laranja"
+    return "Dificuldade Critica", "vermelho"
 
 
 def calcular_score(dados_normalizados: dict, atributos_usuario: dict) -> dict:
@@ -54,11 +54,10 @@ def calcular_score(dados_normalizados: dict, atributos_usuario: dict) -> dict:
     classificacao, cor = classificar_score(score_final)
     top3 = sorted(breakdown.items(), key=lambda item: item[1]["contribuicao"], reverse=True)[:3]
     top3_fatores_criticos = [nome for nome, _ in top3]
-    conectivo = " e " if len(top3_fatores_criticos) > 1 else ""
     justificativa = (
         "Os principais fatores de pressao sobre a venda sao "
         + ", ".join(top3_fatores_criticos[:-1])
-        + conectivo
+        + (" e " if len(top3_fatores_criticos) > 1 else "")
         + top3_fatores_criticos[-1]
         + ", pois concentram a maior contribuicao ponderada no score final."
     )
