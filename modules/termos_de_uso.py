@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from html import escape
+
 import streamlit as st
 
 VERSAO = "1.0"
@@ -9,6 +11,8 @@ DATA = "Abril de 2026"
 AUTORA = "Brenna Carvalho"
 LINKEDIN = "https://www.linkedin.com/in/brennacarvalho/"
 APP_URL = "https://launchscorebrenna.streamlit.app"
+TERMOS_QUERY_KEY = "view"
+TERMOS_QUERY_VALUE = "termos"
 
 TERMOS_COMPLETOS = """
 LAUNCHSCORE — SCORE MARKETING IMOBILIÁRIO
@@ -168,32 +172,63 @@ Metodologia proprietária protegida pela Lei nº 9.609/1998.
 
 
 def exibir_termos_modal() -> None:
-    """Exibe os termos completos em um expander estilizado."""
+    """Mantem o acesso aos termos no sidebar e abre o texto completo em nova janela."""
 
     with st.expander("📄 Termos de Uso Completos — LaunchScore", expanded=False):
         st.markdown(
-            f"""
+            """
         <div style="background:#FAF8F5; border:1px solid #E5DDD0; border-radius:8px;
-                    padding:24px; font-family:'Courier New', monospace; font-size:0.82rem;
-                    color:#1B2A4A; line-height:1.7; max-height:500px; overflow-y:auto;">
-            <pre style="white-space:pre-wrap; font-family:inherit;">{TERMOS_COMPLETOS}</pre>
+                    padding:18px 18px 16px 18px; color:#1B2A4A; line-height:1.65;">
+            <div style="font-weight:700; margin-bottom:8px;">Consulta rápida</div>
+            <div style="font-size:0.9rem; color:#6B7280; margin-bottom:14px;">
+                Os termos completos agora abrem em uma nova janela para nao interromper o fluxo da analise.
+            </div>
+            <a href="?view=termos" target="_blank"
+               style="display:inline-block; background:#1B2A4A; color:#FFFFFF; text-decoration:none;
+                      border:1px solid #E8A020; border-radius:8px; padding:10px 14px; font-weight:700;">
+                Abrir termos em nova janela
+            </a>
         </div>
             """,
             unsafe_allow_html=True,
         )
-        st.download_button(
-            label="⬇️ Baixar Termos de Uso (.txt)",
-            data=TERMOS_COMPLETOS.encode("utf-8"),
-            file_name="termos_de_uso_launchscore.txt",
-            mime="text/plain",
-        )
+        st.caption("Feche a nova janela quando terminar a leitura para continuar no dashboard.")
+
+
+def render_pagina_termos() -> None:
+    """Renderiza uma visualizacao dedicada dos termos para abertura em nova aba."""
+
+    st.markdown(
+        """
+    <div style="max-width:980px; margin:0 auto 24px auto;">
+      <div style="font-size:0.82rem; font-weight:700; letter-spacing:0.10em; text-transform:uppercase; color:#E8A020; margin-bottom:8px;">
+        LaunchScore
+      </div>
+      <div style="font-size:2rem; font-weight:800; color:#1B2A4A;">Termos de Uso</div>
+      <div style="font-size:1rem; color:#6B7280; margin-top:8px;">
+        Visualizacao em janela dedicada para consulta juridica sem interromper o fluxo principal da plataforma.
+      </div>
+    </div>
+        """,
+        unsafe_allow_html=True,
+    )
+    st.info("Feche esta janela quando concluir a leitura para voltar ao dashboard principal.")
+    st.markdown(
+        f"""
+    <div style="max-width:980px; margin:0 auto; background:#FFFFFF; border:1px solid #E5DDD0; border-top:4px solid #E8A020;
+                border-radius:14px; padding:28px 30px; box-shadow:0 10px 28px rgba(27,42,74,0.08);">
+      <pre style="white-space:pre-wrap; margin:0; font-family:'Courier New', monospace; font-size:0.84rem; line-height:1.72; color:#1B2A4A;">{escape(TERMOS_COMPLETOS)}</pre>
+    </div>
+        """,
+        unsafe_allow_html=True,
+    )
 
 
 def exibir_footer_termos() -> None:
     """Footer compacto com link para os termos."""
 
     st.markdown(
-        """
+        f"""
     <div style="background:#F0EDE8; border:1px solid #E5DDD0; border-top:3px solid #E8A020;
                 border-radius:8px; padding:14px 24px; font-size:0.78rem; color:#6B7280;
                 text-align:center; margin-top:32px;">
@@ -203,7 +238,8 @@ def exibir_footer_termos() -> None:
       Todos os direitos reservados. A metodologia de score, os algoritmos de cálculo e a
       interface desta plataforma são propriedade intelectual da autora, protegida pela
       Lei nº 9.609/1998.<br>
-      O uso desta plataforma implica aceite integral dos Termos de Uso acima.
+      O uso desta plataforma implica aceite integral dos
+      <a href="?view=termos" target="_blank" style="color:#E8A020; font-weight:700; text-decoration:none;">Termos de Uso</a>.
       Os resultados têm caráter orientativo e não constituem garantia de resultados financeiros.
     </div>
         """,

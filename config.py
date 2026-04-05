@@ -32,6 +32,7 @@ FAIXA_ECONOMICO_MAX = 500_000
 FAIXA_MEDIO_MAX = 800_000
 
 BRASILAPI_CEP = "https://brasilapi.com.br/api/cep/v2/{cep}"
+VIACEP_CEP = "https://viacep.com.br/ws/{cep}/json/"
 IBGE_SIDRA_BASE = "https://servicodados.ibge.gov.br/api/v3/agregados"
 IBGE_MUNICIPIOS = "https://servicodados.ibge.gov.br/api/v1/localidades/municipios"
 

@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from copy import deepcopy
 import json
 import re
 from datetime import date
@@ -26,7 +27,7 @@ from modules.ibge_api import (
 from modules.media_mix import recomendar_mix
 from modules.report_generator import gerar_pdf
 from modules.score_engine import calcular_score
-from modules.termos_de_uso import AUTORA, LINKEDIN, exibir_footer_termos, exibir_termos_modal
+from modules.termos_de_uso import exibir_footer_termos, exibir_termos_modal, render_pagina_termos
 
 
 st.set_page_config(layout="wide", page_title="LaunchScore")
@@ -402,23 +403,47 @@ def render_sidebar() -> None:
         if "historico" in st.session_state and st.session_state["historico"]:
             st.markdown("---")
             st.markdown("### Analises recentes")
-            for item in st.session_state["historico"][-3:][::-1]:
-                st.markdown(
-                    f"- **{item['nome']}** ({item['cidade']})  \n"
-                    f"Score {item['score']}/100 | Verba base {item['verba']}"
-                )
+            for indice, item in enumerate(st.session_state["historico"][-3:][::-1]):
+                rotulo = f"{item['nome']} · {item['cidade']}"
+                detalhes = f"Score {item['score']}/100 | Verba base {item['verba']}"
+                if item.get("bairro"):
+                    detalhes += f" | Bairro {item['bairro']}"
+                if item.get("resultados"):
+                    if st.button(rotulo, key=f"historico_{item.get('id', indice)}", use_container_width=True):
+                        abrir_analise_recente(item)
+                else:
+                    st.markdown(f"**{rotulo}**")
+                st.caption(detalhes)
+
+
+def abrir_analise_recente(item: dict) -> None:
+    if not item.get("resultados"):
+        return
+    st.session_state["resultados"] = deepcopy(item["resultados"])
+    st.session_state["etapa_ativa"] = "3. Dashboard de Resultados"
+    st.rerun()
 
 
 def preparar_historico(resultados: dict) -> None:
     if "historico" not in st.session_state:
         st.session_state["historico"] = []
+    identificador = "|".join(
+        [
+            resultados["empreendimento"]["nome"].strip().lower(),
+            resultados["localizacao"]["municipio"].strip().lower(),
+            resultados["empreendimento"]["tipologia"].strip().lower(),
+        ]
+    )
     resumo = {
+        "id": identificador,
         "nome": resultados["empreendimento"]["nome"],
         "cidade": resultados["localizacao"]["municipio"],
+        "bairro": resultados["localizacao"].get("bairro", ""),
         "score": resultados["resultado_score"]["score_final"],
         "verba": formatar_moeda(resultados["resultado_verba"]["cenarios"]["base"]["verba_r$"]),
+        "resultados": deepcopy(resultados),
     }
-    historico = [item for item in st.session_state["historico"] if item["nome"] != resumo["nome"]]
+    historico = [item for item in st.session_state["historico"] if item.get("id") != resumo["id"]]
     historico.append(resumo)
     st.session_state["historico"] = historico[-3:]
 
@@ -443,29 +468,45 @@ def obter_sugestao_localizacao(cep: str, cidade_manual: str) -> dict | None:
 
 
 def processar_dados(form_data: dict) -> dict:
+    status_box = st.empty()
     progresso = st.progress(0, text="Iniciando processamento...")
     mensagens = [
-        "🔍 Consultando IBGE para dados do municipio...",
-        "📊 Calculando score de dificuldade de venda...",
-        "💰 Projetando verba e cenarios de investimento...",
-        "📡 Montando mix de midia recomendado...",
-        "👥 Definindo perfil de publico-alvo...",
-        "✅ Relatorio pronto!",
+        "Consulta de dados publicos do municipio",
+        "Calculo do score de dificuldade de venda",
+        "Projecao de verba e cenarios de investimento",
+        "Montagem do mix de midia recomendado",
+        "Definicao do perfil de publico-alvo",
+        "Relatorio pronto",
     ]
+
+    def atualizar_progresso(percentual: int, titulo: str, detalhe: str) -> None:
+        progresso.progress(percentual, text=f"{percentual}% concluido")
+        status_box.markdown(
+            f"""
+            <div style="background:#FFFFFF; border:1px solid #E5DDD0; border-radius:12px; padding:14px 16px; margin:10px 0 14px 0;">
+              <div style="font-size:0.78rem; text-transform:uppercase; letter-spacing:0.08em; color:#E8A020; font-weight:700;">
+                Gerando analise
+              </div>
+              <div style="font-size:1.02rem; color:#1B2A4A; font-weight:800; margin-top:4px;">{titulo}</div>
+              <div style="font-size:0.88rem; color:#6B7280; margin-top:6px;">{detalhe}</div>
+            </div>
+            """,
+            unsafe_allow_html=True,
+        )
 
     localizacao = None
     if form_data["cep"]:
         try:
-            progresso.progress(10, text="Localizando municipio pelo CEP...")
+            atualizar_progresso(10, "Localizando municipio", "Validando o CEP e identificando automaticamente a cidade do empreendimento.")
             localizacao = get_municipio_by_cep(form_data["cep"])
         except Exception:
             st.warning("Nao foi possivel localizar o CEP automaticamente. Usando busca manual por cidade.")
 
     if localizacao is None:
-        progresso.progress(20, text="Buscando municipio pela cidade informada...")
+        atualizar_progresso(20, "Buscando cidade informada", "Usando a cidade digitada como fallback para encontrar o codigo IBGE correto.")
         localizacao = buscar_municipio_por_nome(form_data["cidade_manual"])
 
-    progresso.progress(35, text=mensagens[0].replace("municipio", localizacao["municipio"]))
+    atualizar_progresso(35, mensagens[0], f"Coletando dados de mercado para {localizacao['municipio']} e consolidando as fontes disponiveis.")
     dados_publicos = coletar_todos_dados(
         localizacao["codigo_ibge"],
         localizacao["municipio"],
@@ -486,7 +527,7 @@ def processar_dados(form_data: dict) -> dict:
             "conexao_luxo",
         )
     }
-    progresso.progress(52, text=mensagens[1])
+    atualizar_progresso(52, mensagens[1], "Combinando contexto local, atributos do produto e ajustes macroeconomicos.")
     resultado_score = calcular_score(
         dados_normalizados,
         atributos,
@@ -496,7 +537,7 @@ def processar_dados(form_data: dict) -> dict:
     )
 
     vgv = calcular_vgv(form_data["valor_unidade"], form_data["volume_unidades"])
-    progresso.progress(68, text=mensagens[2])
+    atualizar_progresso(68, mensagens[2], "Estimando VGV, intensidade de investimento e retorno esperado por cenario.")
     resultado_verba = calcular_verba(
         vgv=vgv,
         score=resultado_score["score_final"],
@@ -505,7 +546,7 @@ def processar_dados(form_data: dict) -> dict:
         valor_unidade=form_data["valor_unidade"],
     )
 
-    progresso.progress(82, text=mensagens[3])
+    atualizar_progresso(82, mensagens[3], "Distribuindo a verba entre canais para os cenarios conservador, base e agressivo.")
     mixes = {}
     for cenario in ("conservador", "base", "agressivo"):
         mixes[cenario] = recomendar_mix(
@@ -517,10 +558,10 @@ def processar_dados(form_data: dict) -> dict:
             resultado_verba["cenarios"][cenario]["verba_r$"],
         )
 
-    progresso.progress(92, text=mensagens[4])
+    atualizar_progresso(92, mensagens[4], "Traduzindo os dados em perfil de publico, objecoes e mensagem-chave.")
     perfil_publico = gerar_perfil_publico(dados_ibge, form_data["tipologia"], form_data["valor_unidade"])
 
-    progresso.progress(100, text=mensagens[5])
+    atualizar_progresso(100, mensagens[5], "O dashboard esta pronto para leitura executiva.")
     qualidade_texto, qualidade_cor = calcular_qualidade_dados(dados_ibge)
     contexto = resultado_score.get("justificativa_macro", []) + resultado_score.get("justificativa_mercado_local", [])
     recomendacoes = (
@@ -899,6 +940,10 @@ def render_tab_ibge(resultados: dict) -> None:
     df_fontes = pd.DataFrame(FONTES_DE_DADOS)
     df_fontes["gratuita"] = df_fontes["gratuita"].map(lambda x: "Sim" if x else "Nao")
     df_fontes["requer_key"] = df_fontes["requer_key"].map(lambda x: "Sim" if x else "Nao")
+    col_f1, col_f2, col_f3 = st.columns(3)
+    col_f1.metric("Fontes mapeadas", f"{len(df_fontes)}")
+    col_f2.metric("Ativas agora", f"{(pd.DataFrame(FONTES_DE_DADOS)['status_integracao'].str.contains('Ativa')).sum()}")
+    col_f3.metric("Dependem de chave/conta", f"{(pd.DataFrame(FONTES_DE_DADOS)['requer_key']).sum()}")
     st.dataframe(df_fontes, use_container_width=True, hide_index=True)
 
     st.markdown("### Dados Municipais e Normalizacao")
@@ -1009,11 +1054,11 @@ def render_dashboard(resultados: dict) -> None:
     with tab6:
         render_tab_ibge(resultados)
 
-    st.subheader("Exportar Relatorio")
+    st.subheader("Exportar Apresentacao")
     pdf_bytes = gerar_pdf(resultados)
     cidade = resultados["localizacao"]["municipio"].replace(" ", "_").lower()
     st.download_button(
-        label="📄 Baixar Relatorio Completo em PDF",
+        label="📄 Baixar apresentacao executiva em PDF",
         data=pdf_bytes,
         file_name=f"launchscore_{cidade}_{date.today()}.pdf",
         mime="application/pdf",
@@ -1100,11 +1145,11 @@ def render_dashboard_story(resultados: dict) -> None:
     )
     render_tab_ibge(resultados)
 
-    st.subheader("Exportar Relatorio")
+    st.subheader("Exportar Apresentacao")
     pdf_bytes = gerar_pdf(resultados)
     cidade = resultados["localizacao"]["municipio"].replace(" ", "_").lower()
     st.download_button(
-        label="Baixar Relatorio Completo em PDF",
+        label="Baixar apresentacao executiva em PDF",
         data=pdf_bytes,
         file_name=f"launchscore_{cidade}_{date.today()}.pdf",
         mime="application/pdf",
@@ -1119,14 +1164,29 @@ def render_footer() -> None:
 
 def main() -> None:
     injetar_css()
+    view = st.query_params.get("view", "")
+    if isinstance(view, list):
+        view = view[0] if view else ""
+    if view == "termos":
+        render_pagina_termos()
+        return
     render_sidebar()
     render_header_executive()
     if "historico" not in st.session_state:
         st.session_state["historico"] = []
+    if "etapa_ativa" not in st.session_state:
+        st.session_state["etapa_ativa"] = "1. Dados do Empreendimento"
 
-    tabs = st.tabs(["1. Dados do Empreendimento", "2. Processamento", "3. Dashboard de Resultados"])
+    etapa_ativa = st.radio(
+        "Navegacao",
+        ["1. Dados do Empreendimento", "2. Processamento", "3. Dashboard de Resultados"],
+        index=["1. Dados do Empreendimento", "2. Processamento", "3. Dashboard de Resultados"].index(st.session_state["etapa_ativa"]),
+        horizontal=True,
+        label_visibility="collapsed",
+    )
+    st.session_state["etapa_ativa"] = etapa_ativa
 
-    with tabs[0]:
+    if etapa_ativa == "1. Dados do Empreendimento":
         col_left, col_right = st.columns(2)
         with col_left:
             st.markdown('<div class="bloco-form">', unsafe_allow_html=True)
@@ -1139,9 +1199,15 @@ def main() -> None:
             volume_unidades = st.number_input("Numero de unidades", min_value=1, max_value=5000, step=1, value=120)
             sugestao = obter_sugestao_localizacao(cep, cidade_manual)
             if sugestao:
+                detalhes_localizacao = []
+                if sugestao.get("bairro"):
+                    detalhes_localizacao.append(f"Bairro identificado: {sugestao['bairro']}.")
+                if sugestao.get("rua"):
+                    detalhes_localizacao.append(f"Endereco de referencia: {sugestao['rua']}.")
                 st.info(
                     f"Sugestao automatica de localizacao a partir do CEP/cidade: "
-                    f"{sugestao['score_sugerido']}/5. {sugestao['resumo']}"
+                    f"{sugestao['score_sugerido']}/5. {sugestao['resumo']} "
+                    f"{' '.join(detalhes_localizacao)}"
                 )
             st.markdown("</div>", unsafe_allow_html=True)
 
@@ -1202,7 +1268,7 @@ def main() -> None:
                 """
 <p style="font-size:0.75rem; color:#9CA3AF; text-align:center; margin-top:8px;">
   Ao calcular, voce concorda com os
-  <span style="color:#E8A020;">Termos de Uso</span> da plataforma.
+  <a href="?view=termos" target="_blank" style="color:#E8A020; font-weight:700; text-decoration:none;">Termos de Uso</a> da plataforma.
 </p>
 <br>
                 """,
@@ -1239,11 +1305,14 @@ def main() -> None:
                 try:
                     st.session_state["resultados"] = processar_dados(form_data)
                     preparar_historico(st.session_state["resultados"])
-                    st.success("Analise concluida com sucesso. Confira o dashboard.")
+                    st.session_state["etapa_ativa"] = "3. Dashboard de Resultados"
+                    st.success("Analise concluida com sucesso. O dashboard ja esta pronto para abertura.")
+                    if st.button("Abrir dashboard completo", use_container_width=True):
+                        st.rerun()
                 except Exception as exc:
                     st.error(f"Nao foi possivel concluir a analise: {exc}")
 
-    with tabs[1]:
+    if etapa_ativa == "2. Processamento":
         if "resultados" in st.session_state:
             st.markdown("## Processamento")
             st.json(
@@ -1257,7 +1326,7 @@ def main() -> None:
         else:
             st.info("Preencha os dados na primeira etapa para iniciar o processamento.")
 
-    with tabs[2]:
+    if etapa_ativa == "3. Dashboard de Resultados":
         if "resultados" in st.session_state:
             render_dashboard_story(st.session_state["resultados"])
         else:

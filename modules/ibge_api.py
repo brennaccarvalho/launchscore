@@ -14,6 +14,7 @@ from config import (
     IBGE_SIDRA_BASE,
     MEDIANAS_NACIONAIS,
     REQUEST_TIMEOUT,
+    VIACEP_CEP,
 )
 
 
@@ -25,6 +26,42 @@ def _request_json(url: str) -> Any:
     response = requests.get(url, timeout=REQUEST_TIMEOUT)
     response.raise_for_status()
     return response.json()
+
+
+def _texto_limpo(valor: Any) -> str:
+    return str(valor or "").strip()
+
+
+def _buscar_payload_cep(url: str) -> dict:
+    payload = _request_json(url)
+    if isinstance(payload, dict) and payload.get("erro"):
+        raise ValueError("CEP nao encontrado na fonte consultada.")
+    return payload if isinstance(payload, dict) else {}
+
+
+def _combinar_payload_cep(cep_limpo: str, brasilapi: dict | None, viacep: dict | None) -> dict:
+    brasilapi = brasilapi or {}
+    viacep = viacep or {}
+
+    municipio = _texto_limpo(viacep.get("localidade")) or _texto_limpo(brasilapi.get("city"))
+    uf = _texto_limpo(viacep.get("uf")) or _texto_limpo(brasilapi.get("state"))
+    codigo_ibge = _texto_limpo(viacep.get("ibge")) or _texto_limpo(brasilapi.get("ibge"))
+    bairro = _texto_limpo(viacep.get("bairro")) or _texto_limpo(brasilapi.get("neighborhood"))
+    rua = _texto_limpo(viacep.get("logradouro")) or _texto_limpo(brasilapi.get("street"))
+
+    if not municipio or not uf or not codigo_ibge:
+        raise RuntimeError("Nao foi possivel localizar o CEP automaticamente.")
+
+    fonte = "ViaCEP + BrasilAPI" if brasilapi and viacep else "ViaCEP" if viacep else "BrasilAPI"
+    return {
+        "municipio": municipio,
+        "uf": uf,
+        "codigo_ibge": codigo_ibge,
+        "cep": cep_limpo,
+        "bairro": bairro,
+        "rua": rua,
+        "fonte": fonte,
+    }
 
 
 def _embalar_variavel(
@@ -50,23 +87,33 @@ def _embalar_variavel(
 
 @st.cache_data(ttl=3600)
 def get_municipio_by_cep(cep: str) -> dict:
-    """Busca municipio pela BrasilAPI a partir do CEP."""
+    """Busca municipio a partir do CEP combinando BrasilAPI e ViaCEP."""
 
     cep_limpo = _limpar_cep(cep)
     if len(cep_limpo) != 8:
         raise ValueError("CEP invalido. Informe 8 digitos.")
 
-    try:
-        data = _request_json(BRASILAPI_CEP.format(cep=cep_limpo))
-        return {
-            "municipio": data.get("city", ""),
-            "uf": data.get("state", ""),
-            "codigo_ibge": str(data.get("ibge", "")),
-            "cep": cep_limpo,
-            "bairro": data.get("neighborhood", ""),
-            "rua": data.get("street", ""),
-            "fonte": "BrasilAPI",
+    brasilapi: dict = {}
+    viacep: dict = {}
+
+    with ThreadPoolExecutor(max_workers=2) as executor:
+        futuros = {
+            executor.submit(_buscar_payload_cep, BRASILAPI_CEP.format(cep=cep_limpo)): "brasilapi",
+            executor.submit(_buscar_payload_cep, VIACEP_CEP.format(cep=cep_limpo)): "viacep",
         }
+        for futuro in as_completed(futuros):
+            origem = futuros[futuro]
+            try:
+                payload = futuro.result()
+            except Exception:
+                payload = {}
+            if origem == "brasilapi":
+                brasilapi = payload
+            else:
+                viacep = payload
+
+    try:
+        return _combinar_payload_cep(cep_limpo, brasilapi, viacep)
     except Exception as exc:
         raise RuntimeError("Nao foi possivel localizar o CEP automaticamente.") from exc
 
@@ -396,4 +443,6 @@ def sugerir_pontuacao_localizacao(localizacao: dict, dados_ibge: dict | None = N
         "score_sugerido": score,
         "motivos": motivos[:3],
         "resumo": " ".join(motivos[:3]),
+        "bairro": bairro,
+        "rua": rua,
     }
