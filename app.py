@@ -13,7 +13,7 @@ import plotly.graph_objects as go
 import streamlit as st
 import streamlit.components.v1 as components
 
-from config import CORES, CORES_CANAIS
+from config import CORES, CORES_CANAIS, CORES_CENARIOS
 from modules.audience import gerar_perfil_publico
 from modules.budget_engine import calcular_verba, calcular_vgv
 from modules.data_orchestrator import FONTES_DE_DADOS, calcular_favorabilidade_mercado, coletar_todos_dados
@@ -24,7 +24,7 @@ from modules.ibge_api import (
     normalizar_para_score,
     sugerir_pontuacao_localizacao,
 )
-from modules.media_mix import recomendar_mix
+from modules.media_mix import BIBLIOTECA_CAMPANHAS, recomendar_mix
 from modules.report_generator import gerar_pdf
 from modules.score_engine import calcular_score
 from modules.termos_de_uso import exibir_footer_termos, exibir_termos_modal, render_pagina_termos
@@ -208,6 +208,155 @@ def card(titulo: str, conteudo_html: str, cor_borda: str = "#E5DDD0", icone: str
         """,
         unsafe_allow_html=True,
     )
+
+
+def area_feedback_cta(ui=st):
+    container = ui.container()
+    _, col_feedback, _ = container.columns([0.04, 0.92, 0.04])
+    return col_feedback
+
+
+def _dados_cenarios_grafico() -> list[tuple[str, str, str]]:
+    return [
+        ("Conservador", "conservador", CORES_CENARIOS["conservador"]),
+        ("Base", "base", CORES_CENARIOS["base"]),
+        ("Agressivo", "agressivo", CORES_CENARIOS["agressivo"]),
+    ]
+
+
+def render_graficos_cenarios(cenarios: dict) -> None:
+    st.markdown("### Comparativo Visual por Escala")
+    st.caption("As metricas usam escalas separadas para manter verba, leads e vendas legiveis na mesma leitura.")
+    metricas = [
+        ("Verba prevista", "verba_r$", formatar_moeda),
+        ("Leads estimados", "leads_estimados", lambda valor: f"{valor:.0f}"),
+        ("Vendas estimadas", "vendas_estimadas", lambda valor: f"{valor:.1f}"),
+    ]
+    cols = st.columns(3)
+    for col, (titulo, chave, formatador) in zip(cols, metricas):
+        with col:
+            nomes = []
+            valores = []
+            cores = []
+            textos = []
+            for nome_exibicao, chave_cenario, cor in _dados_cenarios_grafico():
+                valor = cenarios[chave_cenario][chave]
+                nomes.append(nome_exibicao)
+                valores.append(valor)
+                cores.append(cor)
+                textos.append(formatador(valor))
+            fig = go.Figure(
+                data=[
+                    go.Bar(
+                        x=nomes,
+                        y=valores,
+                        marker_color=cores,
+                        text=textos,
+                        textposition="outside",
+                        cliponaxis=False,
+                        hovertemplate=f"%{{x}}<br>{titulo}: %{{text}}<extra></extra>",
+                    )
+                ]
+            )
+            fig.update_layout(
+                title=titulo,
+                paper_bgcolor=CORES["fundo"],
+                plot_bgcolor=CORES["fundo"],
+                height=320,
+                margin=dict(l=10, r=10, t=48, b=10),
+                showlegend=False,
+                yaxis_title="",
+                xaxis_title="",
+            )
+            st.plotly_chart(fig, use_container_width=True, key=f"grafico_cenarios_{chave.replace('$', 's')}")
+
+
+def render_bloco_interesse_busca(dados_trends: dict) -> None:
+    st.markdown("### Interesse de Busca")
+    termos = dados_trends.get("termos", [])
+    assunto = dados_trends.get("assunto", "Demanda digital imobiliaria local")
+    tendencia = dados_trends.get("tendencia_recente", "indisponivel")
+    badge = "badge-verde" if tendencia == "crescendo" else "badge-amarelo" if tendencia == "estavel" else "badge-vermelho"
+    termos_html = "".join(
+        f"<span class='fonte-tag' style='margin:0 6px 6px 0;'>{termo}</span>"
+        for termo in termos
+    ) or "<span class='fonte-tag'>Sem termos configurados</span>"
+    col_a, col_b = st.columns([1.05, 1.95])
+    with col_a:
+        card(
+            "Leitura considerada",
+            (
+                f"<p style='margin:0 0 10px 0;'><strong>Assunto:</strong> {assunto}</p>"
+                f"<p style='margin:0 0 6px 0;'><strong>Termos monitorados:</strong></p>"
+                f"<div style='margin-bottom:12px;'>{termos_html}</div>"
+                f"<p style='margin:0 0 8px 0;'><strong>Interesse medio (12m):</strong> {dados_trends.get('score_interesse', 50)}/100</p>"
+                f"<p style='margin:0;'><strong>Fonte:</strong> {dados_trends.get('fonte', 'Google Trends')}</p>"
+            ),
+            cor_borda="#D6C5A0",
+            icone="🔎",
+        )
+        st.markdown(f"<span class='{badge}'>Tendencia: {tendencia.title()}</span>", unsafe_allow_html=True)
+    with col_b:
+        serie = dados_trends.get("serie_interesse", [])
+        if serie:
+            df_trends = pd.DataFrame(serie)
+            fig = go.Figure(
+                data=[
+                    go.Scatter(
+                        x=df_trends["data"],
+                        y=df_trends["interesse"],
+                        mode="lines+markers",
+                        line=dict(color=CORES["azul_escuro"], width=3),
+                        marker=dict(color=CORES["dourado"], size=7),
+                        fill="tozeroy",
+                        fillcolor="rgba(232,160,32,0.12)",
+                        hovertemplate="%{x}<br>Interesse: %{y:.0f}/100<extra></extra>",
+                    )
+                ]
+            )
+            fig.update_layout(
+                title="Interesse de busca nos ultimos 12 meses",
+                paper_bgcolor=CORES["fundo"],
+                plot_bgcolor=CORES["fundo"],
+                height=320,
+                margin=dict(l=10, r=10, t=48, b=10),
+                xaxis_title="",
+                yaxis_title="Indice",
+            )
+            st.plotly_chart(fig, use_container_width=True, key="trends_mix")
+        else:
+            detalhe_erro = dados_trends.get("erro")
+            texto = "Google Trends indisponivel no momento. O score usa fallback neutro quando essa fonte nao responde."
+            if detalhe_erro:
+                texto = f"{texto} Detalhe tecnico: {detalhe_erro}"
+            st.info(texto)
+
+
+def render_tipos_campanha_sugeridos(canais: dict) -> None:
+    canais_suportados = [canal for canal in BIBLIOTECA_CAMPANHAS if canal in canais]
+    if not canais_suportados:
+        return
+
+    st.markdown("### Tipos de Campanha Sugeridos")
+    st.caption("Curadoria baseada nas bibliotecas oficiais de suporte da Meta e do Google Ads.")
+    cols = st.columns(len(canais_suportados))
+    for col, canal in zip(cols, canais_suportados):
+        biblioteca = BIBLIOTECA_CAMPANHAS[canal]
+        with col:
+            campanhas_html = "".join(
+                f"<p style='margin:0 0 10px 0;'><strong>{campanha['tipo']}</strong>: {campanha['quando_usar']}</p>"
+                for campanha in biblioteca["campanhas"]
+            )
+            observacao = biblioteca.get("observacao")
+            if observacao:
+                campanhas_html += f"<p style='margin:10px 0 0 0; color:#6B7280;'><strong>Nota:</strong> {observacao}</p>"
+            card(
+                canal,
+                campanhas_html,
+                cor_borda=CORES_CANAIS.get(canal, CORES["borda"]),
+                icone="📚",
+            )
+            st.link_button(f"Abrir suporte oficial de {biblioteca['fonte']}", biblioteca["fonte_url"])
 
 
 def calcular_qualidade_dados(dados_ibge: dict) -> tuple[str, str]:
@@ -467,9 +616,12 @@ def obter_sugestao_localizacao(cep: str, cidade_manual: str) -> dict | None:
     return None
 
 
-def processar_dados(form_data: dict) -> dict:
-    status_box = st.empty()
-    progresso = st.progress(0, text="Iniciando processamento...")
+def processar_dados(form_data: dict, ui=st) -> dict:
+    feedback_ui = area_feedback_cta(ui)
+    status_container = feedback_ui.container()
+    with status_container:
+        status_box = st.empty()
+        progresso = st.progress(0, text="Iniciando processamento...")
     mensagens = [
         "Consulta de dados publicos do municipio",
         "Calculo do score de dificuldade de venda",
@@ -500,7 +652,7 @@ def processar_dados(form_data: dict) -> dict:
             atualizar_progresso(10, "Localizando municipio", "Validando o CEP e identificando automaticamente a cidade do empreendimento.")
             localizacao = get_municipio_by_cep(form_data["cep"])
         except Exception:
-            st.warning("Nao foi possivel localizar o CEP automaticamente. Usando busca manual por cidade.")
+            feedback_ui.warning("Nao foi possivel localizar o CEP automaticamente. Usando busca manual por cidade.")
 
     if localizacao is None:
         atualizar_progresso(20, "Buscando cidade informada", "Usando a cidade digitada como fallback para encontrar o codigo IBGE correto.")
@@ -562,6 +714,8 @@ def processar_dados(form_data: dict) -> dict:
     perfil_publico = gerar_perfil_publico(dados_ibge, form_data["tipologia"], form_data["valor_unidade"])
 
     atualizar_progresso(100, mensagens[5], "O dashboard esta pronto para leitura executiva.")
+    progresso.empty()
+    status_box.empty()
     qualidade_texto, qualidade_cor = calcular_qualidade_dados(dados_ibge)
     contexto = resultado_score.get("justificativa_macro", []) + resultado_score.get("justificativa_mercado_local", [])
     recomendacoes = (
@@ -741,19 +895,7 @@ def render_tab_cenarios(resultados: dict) -> None:
 
     df_tabela = montar_tabela_cenarios(resultados)
     st.dataframe(df_tabela, use_container_width=True, hide_index=True)
-
-    linhas = []
-    for nome, dados in cenarios.items():
-        linhas.extend(
-            [
-                {"Cenario": nome.capitalize(), "Indicador": "Verba", "Valor": dados["verba_r$"]},
-                {"Cenario": nome.capitalize(), "Indicador": "Leads", "Valor": dados["leads_estimados"]},
-                {"Cenario": nome.capitalize(), "Indicador": "Vendas", "Valor": dados["vendas_estimadas"]},
-            ]
-        )
-    fig = px.bar(pd.DataFrame(linhas), x="Cenario", y="Valor", color="Indicador", barmode="group")
-    fig.update_layout(paper_bgcolor=CORES["fundo"], plot_bgcolor=CORES["fundo"], height=420)
-    st.plotly_chart(fig, use_container_width=True)
+    render_graficos_cenarios(cenarios)
 
 
 def render_mix_cenario(nome_cenario: str, mix: dict) -> None:
@@ -821,6 +963,8 @@ def render_tab_mix(resultados: dict) -> None:
         "<p style='color:#6B7280;'>Cada aba mostra a distribuicao recomendada de budget, os canais lideres e o potencial de geracao de leads por cenario.</p>",
         unsafe_allow_html=True,
     )
+    render_bloco_interesse_busca(resultados["dados_publicos"]["trends"])
+    render_tipos_campanha_sugeridos(resultados["mix_midias"]["base"]["canais"])
     tab_cons, tab_base, tab_agr = st.tabs(["🔵 Conservador", "⚡ Base (Recomendado)", "🔴 Agressivo"])
     with tab_cons:
         render_mix_cenario("conservador", resultados["mix_midias"]["conservador"])
@@ -905,25 +1049,7 @@ def render_tab_contexto_mercado(resultados: dict) -> None:
                 icone="📊",
             )
 
-    st.markdown("### Contexto Local")
-    local_cols = st.columns(4)
-    local_cols[0].metric("PIB per capita", formatar_valor_contexto(dados_ipea.get("pib_percapita", {}).get("valor"), "moeda"))
-    local_cols[1].metric("Gini", formatar_valor_contexto(dados_ipea.get("gini", {}).get("valor"), "indice"))
-    local_cols[2].metric("Desemprego", formatar_valor_contexto(dados_ipea.get("desemprego", {}).get("valor"), "pct"))
-    local_cols[3].metric("IDHM", formatar_valor_contexto(dados_publicos["idhm"].get("idhm"), "indice"))
-
-    st.markdown("### Demanda Digital")
-    tendencia = dados_trends.get("tendencia_recente", "indisponivel")
-    badge = "badge-verde" if tendencia == "crescendo" else "badge-amarelo" if tendencia == "estavel" else "badge-vermelho"
-    st.markdown(f"<span class='{badge}'>Tendência: {tendencia.title()}</span>", unsafe_allow_html=True)
-    serie = dados_trends.get("serie_interesse", [])
-    if serie:
-        df_trends = pd.DataFrame(serie)
-        fig = px.line(df_trends, x="data", y="interesse", markers=True, title="Interesse de busca nos últimos 12 meses")
-        fig.update_layout(paper_bgcolor=CORES["fundo"], plot_bgcolor=CORES["fundo"], height=320)
-        st.plotly_chart(fig, use_container_width=True)
-    else:
-        st.info("Google Trends indisponível no momento. O score usa fallback neutro quando essa fonte nao responde.")
+    st.caption("O detalhamento do interesse de busca e dos termos monitorados foi movido para a aba Mix de Midia.")
 
     st.markdown("### Índice de Favorabilidade do Mercado")
     col_a, col_b = st.columns([1, 2])
@@ -984,31 +1110,6 @@ def render_tab_ibge(resultados: dict) -> None:
     col2.metric("Dados reais", f"{reais}")
     col3.metric("Estimativas", f"{estimativas}")
     st.dataframe(df_ibge, use_container_width=True, hide_index=True)
-
-    st.markdown("### Novas Fontes Complementares")
-    complementares = [
-        {
-            "Fonte": "BCB/SGS",
-            "Resumo": formatar_valor_contexto(resultados["dados_publicos"]["bcb"].get("selic", {}).get("valor"), "pct"),
-            "Status": resultados["dados_publicos"]["bcb"].get("selic", {}).get("fonte"),
-        },
-        {
-            "Fonte": "Ipeadata",
-            "Resumo": formatar_valor_contexto(resultados["dados_publicos"]["ipea"].get("pib_percapita", {}).get("valor"), "moeda"),
-            "Status": resultados["dados_publicos"]["ipea"].get("pib_percapita", {}).get("fonte"),
-        },
-        {
-            "Fonte": "Atlas Brasil",
-            "Resumo": formatar_valor_contexto(resultados["dados_publicos"]["idhm"].get("idhm"), "indice"),
-            "Status": resultados["dados_publicos"]["idhm"].get("fonte"),
-        },
-        {
-            "Fonte": "Google Trends",
-            "Resumo": str(resultados["dados_publicos"]["trends"].get("score_interesse", 50)),
-            "Status": resultados["dados_publicos"]["trends"].get("fonte"),
-        },
-    ]
-    st.dataframe(pd.DataFrame(complementares), use_container_width=True, hide_index=True)
 
     df_heat = montar_breakdown_df(resultados["resultado_score"])[["Variavel", "Contribuicao"]]
     fig_heat = px.bar(
@@ -1277,6 +1378,8 @@ def main() -> None:
             calcular = st.button("🚀 Calcular Score e Gerar Relatorio", type="primary", use_container_width=True)
             st.markdown("</div>", unsafe_allow_html=True)
 
+        feedback_slot = col_right.empty()
+
         form_data = {
             "nome_empreendimento": nome_empreendimento,
             "cep": cep,
@@ -1296,21 +1399,28 @@ def main() -> None:
             mensagens = validar_inputs(form_data)
             erros = [texto for tipo, texto in mensagens if tipo == "erro"]
             avisos = [texto for tipo, texto in mensagens if tipo == "aviso"]
-            for aviso in avisos:
-                st.warning(aviso)
             if erros:
-                for erro in erros:
-                    st.error(erro)
+                with area_feedback_cta(feedback_slot):
+                    for aviso in avisos:
+                        st.warning(aviso)
+                    for erro in erros:
+                        st.error(erro)
             else:
                 try:
-                    st.session_state["resultados"] = processar_dados(form_data)
+                    st.session_state["resultados"] = processar_dados(form_data, ui=feedback_slot)
                     preparar_historico(st.session_state["resultados"])
                     st.session_state["etapa_ativa"] = "3. Dashboard de Resultados"
-                    st.success("Analise concluida com sucesso. O dashboard ja esta pronto para abertura.")
-                    if st.button("Abrir dashboard completo", use_container_width=True):
-                        st.rerun()
+                    with area_feedback_cta(feedback_slot):
+                        for aviso in avisos:
+                            st.warning(aviso)
+                        st.success("Analise concluida com sucesso. O dashboard ja esta pronto para abertura.")
+                        if st.button("Abrir dashboard completo", use_container_width=True):
+                            st.rerun()
                 except Exception as exc:
-                    st.error(f"Nao foi possivel concluir a analise: {exc}")
+                    with area_feedback_cta(feedback_slot):
+                        for aviso in avisos:
+                            st.warning(aviso)
+                        st.error(f"Nao foi possivel concluir a analise: {exc}")
 
     if etapa_ativa == "2. Processamento":
         if "resultados" in st.session_state:

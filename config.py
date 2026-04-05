@@ -100,6 +100,12 @@ CORES_CANAIS = {
     "Influenciadores / Conteudo": "#EC4899",
 }
 
+CORES_CENARIOS = {
+    "conservador": "#A9BEDB",
+    "base": "#E8A020",
+    "agressivo": "#C46A3A",
+}
+
 CORES_RELATORIO = {
     "azul": CORES["azul_escuro"],
     "dourado": CORES["dourado"],

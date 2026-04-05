@@ -6,7 +6,6 @@ from datetime import date
 from io import BytesIO
 from pathlib import Path
 
-from reportlab.graphics.charts.barcharts import VerticalBarChart
 from reportlab.graphics.charts.piecharts import Pie
 from reportlab.graphics.shapes import Drawing, Line, Rect, String
 from reportlab.lib import colors
@@ -15,7 +14,7 @@ from reportlab.lib.styles import ParagraphStyle, getSampleStyleSheet
 from reportlab.lib.units import cm
 from reportlab.platypus import Image, PageBreak, Paragraph, SimpleDocTemplate, Spacer, Table, TableStyle
 
-from config import PDF_RODAPE
+from config import CORES_CENARIOS, PDF_RODAPE
 from modules.data_orchestrator import FONTES_DE_DADOS
 from modules.termos_de_uso import AUTORA, LINKEDIN
 
@@ -83,6 +82,16 @@ def _numero(valor: float | int | None, *, casas: int = 1, sufixo: str = "") -> s
         corpo = f"{valor:,.{casas}f}"
     corpo = corpo.replace(",", "X").replace(".", ",").replace("X", ".")
     return f"{corpo}{sufixo}"
+
+
+def _moeda_curta(valor: float | None) -> str:
+    if valor is None:
+        return "Indisponivel"
+    if valor >= 1_000_000:
+        return f"R$ {valor / 1_000_000:.1f} mi".replace(".", ",")
+    if valor >= 1_000:
+        return f"R$ {valor / 1_000:.0f} mil".replace(".", ",")
+    return _moeda(valor)
 
 
 def _styles():
@@ -233,23 +242,34 @@ def _gauge_drawing(score: float, classificacao: str) -> Drawing:
 
 def _bar_drawing(cenarios: dict) -> Drawing:
     drawing = Drawing(470, 220)
-    chart = VerticalBarChart()
-    chart.x = 40
-    chart.y = 40
-    chart.height = 140
-    chart.width = 380
-    chart.data = [
-        [cenarios["conservador"]["verba_r$"], cenarios["base"]["verba_r$"], cenarios["agressivo"]["verba_r$"]],
-        [cenarios["conservador"]["leads_estimados"], cenarios["base"]["leads_estimados"], cenarios["agressivo"]["leads_estimados"]],
-        [cenarios["conservador"]["vendas_estimadas"], cenarios["base"]["vendas_estimadas"], cenarios["agressivo"]["vendas_estimadas"]],
+    drawing.add(String(40, 194, "Comparativo entre verba, leads e vendas estimadas", fontName="Helvetica-Bold", fontSize=11, fillColor=AZUL))
+    specs = [
+        ("Verba", "verba_r$", _moeda_curta),
+        ("Leads", "leads_estimados", lambda valor: f"{valor:.0f}"),
+        ("Vendas", "vendas_estimadas", lambda valor: _numero(valor, casas=1)),
     ]
-    chart.categoryAxis.categoryNames = ["Conservador", "Base", "Agressivo"]
-    chart.valueAxis.valueMin = 0
-    chart.bars[0].fillColor = AZUL
-    chart.bars[1].fillColor = DOURADO
-    chart.bars[2].fillColor = colors.HexColor("#16A34A")
-    drawing.add(chart)
-    drawing.add(String(40, 190, "Comparativo entre verba, leads e vendas estimadas", fontName="Helvetica-Bold", fontSize=11, fillColor=AZUL))
+    cenarios_plot = [
+        ("conservador", "Cons.", colors.HexColor(CORES_CENARIOS["conservador"])),
+        ("base", "Base", colors.HexColor(CORES_CENARIOS["base"])),
+        ("agressivo", "Agr.", colors.HexColor(CORES_CENARIOS["agressivo"])),
+    ]
+    for idx, (titulo, chave, formatador) in enumerate(specs):
+        x_inicial = 40 + idx * 140
+        y_base = 42
+        altura_max = 95
+        largura_barra = 24
+        espacamento = 12
+        valores = [cenarios[nome][chave] for nome, _, _ in cenarios_plot]
+        maior = max(valores) or 1
+        drawing.add(String(x_inicial, 170, titulo, fontName="Helvetica-Bold", fontSize=9.5, fillColor=AZUL))
+        drawing.add(Line(x_inicial - 2, y_base, x_inicial + 102, y_base, strokeColor=CINZA_CLARO, strokeWidth=0.8))
+        for posicao, (nome, label, cor) in enumerate(cenarios_plot):
+            valor = cenarios[nome][chave]
+            altura = (valor / maior) * altura_max if maior else 0
+            x_barra = x_inicial + posicao * (largura_barra + espacamento)
+            drawing.add(Rect(x_barra, y_base, largura_barra, altura, fillColor=cor, strokeColor=None))
+            drawing.add(String(x_barra - 1, y_base - 13, label, fontName="Helvetica", fontSize=7.5, fillColor=CINZA))
+            drawing.add(String(x_barra - 4, y_base + altura + 6, formatador(valor), fontName="Helvetica", fontSize=7, fillColor=AZUL))
     return drawing
 
 
@@ -323,7 +343,6 @@ def _fontes_ativas_relatorio(styles) -> Table:
 
 def _contexto_cards(dados_publicos: dict, styles) -> Table:
     dados_bcb = dados_publicos["bcb"]
-    dados_ipea = dados_publicos["ipea"]
     dados_trends = dados_publicos["trends"]
 
     macro = _info_card(
@@ -333,34 +352,23 @@ def _contexto_cards(dados_publicos: dict, styles) -> Table:
             f"Juros imobiliario em <b>{_numero(dados_bcb.get('juros_imobiliario', {}).get('valor'), sufixo='%')}</b> "
             f"e INCC em <b>{_numero(dados_bcb.get('incc', {}).get('valor'), sufixo='%')}</b> ajudam a calibrar o apetite de compra."
         ),
-        5.0 * cm,
+        7.7 * cm,
         styles,
         background=AZUL_SUAVE,
     )
-    local = _info_card(
-        "Mercado local",
-        (
-            f"PIB per capita em <b>{_moeda(dados_ipea.get('pib_percapita', {}).get('valor'))}</b>. "
-            f"Desemprego em <b>{_numero(dados_ipea.get('desemprego', {}).get('valor'), sufixo='%')}</b> "
-            f"e Gini em <b>{_numero(dados_ipea.get('gini', {}).get('valor'), casas=2)}</b> sinalizam ambiente de absorcao."
-        ),
-        5.0 * cm,
-        styles,
-        background=CREME,
-    )
-    termos = ", ".join(dados_trends.get("termos", [])[:2]) or "Sem leitura detalhada"
+    termos = ", ".join(dados_trends.get("termos", [])[:3]) or "Sem leitura detalhada"
     digital = _info_card(
-        "Demanda digital",
+        "Interesse de busca",
         (
             f"Interesse medio em <b>{_numero(dados_trends.get('score_interesse'), casas=0)}/100</b> "
             f"com tendencia <b>{dados_trends.get('tendencia_recente', 'indisponivel')}</b>. "
             f"Termos monitorados: <b>{termos}</b>."
         ),
-        5.0 * cm,
+        7.7 * cm,
         styles,
         background=AMARELO_SUAVE,
     )
-    tabela = Table([[macro, local, digital]], colWidths=[5.2 * cm, 5.2 * cm, 5.2 * cm])
+    tabela = Table([[macro, digital]], colWidths=[7.9 * cm, 7.9 * cm])
     tabela.setStyle(TableStyle([("VALIGN", (0, 0), (-1, -1), "TOP")]))
     return tabela
 

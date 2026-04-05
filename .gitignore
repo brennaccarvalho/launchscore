@@ -2,6 +2,7 @@ __pycache__/
 *.py[cod]
 *.log
 .pytest_cache/
+pytest-cache-files-*/
 .streamlit/
 .venv/
 venv/

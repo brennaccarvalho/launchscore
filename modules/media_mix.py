@@ -93,6 +93,54 @@ TATICAS_CANAL = {
     ],
 }
 
+BIBLIOTECA_CAMPANHAS = {
+    "Meta Ads (Instagram/Facebook)": {
+        "fonte": "Meta for Business",
+        "fonte_url": "https://www.facebook.com/business/ads/ad-objectives",
+        "campanhas": [
+            {
+                "tipo": "Leads",
+                "quando_usar": "captacao direta de cadastros com formulario instantaneo, mensagem ou ligacao.",
+            },
+            {
+                "tipo": "Traffic",
+                "quando_usar": "levar audiencia qualificada para landing page, WhatsApp ou pagina do empreendimento.",
+            },
+            {
+                "tipo": "Awareness",
+                "quando_usar": "abrir cobertura de lancamento, reforcar localizacao e ganhar lembranca de marca na regiao.",
+            },
+            {
+                "tipo": "Sales",
+                "quando_usar": "otimizar para conversoes quando pixel, CAPI e eventos qualificados ja estiverem maduros.",
+            },
+        ],
+    },
+    "Google Ads (Search + Display)": {
+        "fonte": "Google Ads Help",
+        "fonte_url": "https://support.google.com/google-ads/answer/2567043",
+        "observacao": "O suporte do Google orienta escolher o tipo pelo objetivo da campanha e pelo inventario desejado.",
+        "campanhas": [
+            {
+                "tipo": "Search",
+                "quando_usar": "capturar demanda de alta intencao por bairro, tipologia, preco e financiamento.",
+            },
+            {
+                "tipo": "Display",
+                "quando_usar": "fazer remarketing e ampliar cobertura visual fora da busca.",
+            },
+            {
+                "tipo": "Performance Max",
+                "quando_usar": "maximizar leads com ativos multiformato e cobertura em varios canais do Google.",
+            },
+            {
+                "tipo": "Demand Gen",
+                "quando_usar": "trabalhar descoberta com video e imagem em superficies de navegacao; o Google vem migrando VAC para esse formato em abril de 2026.",
+            },
+        ],
+    },
+}
+
 
 def _mix_base(tipologia: str, valor_unidade: float) -> dict[str, float]:
     tipo = tipologia.lower()
