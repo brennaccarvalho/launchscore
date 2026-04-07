@@ -1,3 +1,8 @@
+# Copyright (c) 2026 Brenna Carvalho.
+# All rights reserved.
+# This software is proprietary and part of a SaaS platform.
+# Unauthorized use, reproduction, or reverse engineering is prohibited.
+
 """Aplicativo Streamlit principal do LaunchScore."""
 
 from __future__ import annotations
@@ -15,7 +20,7 @@ import streamlit.components.v1 as components
 
 from config import CORES, CORES_CANAIS, CORES_CENARIOS
 from modules.audience import gerar_perfil_publico
-from modules.budget_engine import calcular_verba, calcular_vgv
+from modules.budget_engine import calcular_pressao_custos, calcular_verba, calcular_vgv
 from modules.data_orchestrator import FONTES_DE_DADOS, calcular_favorabilidade_mercado, coletar_todos_dados
 from modules.ibge_api import (
     buscar_municipio_por_nome,
@@ -93,6 +98,19 @@ def injetar_css() -> None:
     background: rgba(255,255,255,0.55); border: 1px solid #E5DDD0; border-radius: 12px; padding: 20px;
     box-shadow: 0 2px 8px rgba(27,42,74,0.04); min-height: 100%;
   }
+  .context-shell {
+    background:#FFFFFF; border:1px solid #E5DDD0; border-radius:14px; padding:20px;
+    box-shadow:0 8px 24px rgba(27,42,74,0.05); margin-bottom:18px;
+  }
+  .context-kicker {
+    font-size:0.75rem; text-transform:uppercase; letter-spacing:0.12em; color:#E8A020; font-weight:700;
+  }
+  .context-title {
+    font-size:1.25rem; font-weight:800; color:#1B2A4A; margin-top:6px; margin-bottom:6px;
+  }
+  .context-body {
+    color:#6B7280; font-size:0.92rem; line-height:1.55;
+  }
 </style>
         """,
         unsafe_allow_html=True,
@@ -165,6 +183,8 @@ def formatar_valor_contexto(valor: float | int | None, formato: str = "numero") 
         return f"{float(valor):.2f}".replace(".", ",")
     if formato == "moeda":
         return formatar_moeda(float(valor))
+    if formato == "numero":
+        return f"{float(valor):,.0f}".replace(",", ".")
     return f"{float(valor):.2f}".replace(".", ",")
 
 
@@ -662,6 +682,7 @@ def processar_dados(form_data: dict, ui=st) -> dict:
     dados_publicos = coletar_todos_dados(
         localizacao["codigo_ibge"],
         localizacao["municipio"],
+        localizacao["uf"],
         form_data["tipologia"],
     )
     dados_ibge = dados_publicos["ibge"]
@@ -686,6 +707,9 @@ def processar_dados(form_data: dict, ui=st) -> dict:
         dados_bcb=dados_publicos["bcb"],
         dados_ipea=dados_publicos["ipea"],
         dados_trends=dados_publicos["trends"],
+        dados_fipezap=dados_publicos["fipezap"],
+        dados_rib=dados_publicos["rib"],
+        valor_unidade=form_data["valor_unidade"],
     )
 
     vgv = calcular_vgv(form_data["valor_unidade"], form_data["volume_unidades"])
@@ -717,7 +741,7 @@ def processar_dados(form_data: dict, ui=st) -> dict:
     progresso.empty()
     status_box.empty()
     qualidade_texto, qualidade_cor = calcular_qualidade_dados(dados_ibge)
-    contexto = resultado_score.get("justificativa_macro", []) + resultado_score.get("justificativa_mercado_local", [])
+    contexto = resultado_score.get("justificativas_contextuais", [])
     recomendacoes = (
         f"{resultado_score['justificativa_texto']} "
         f"O cenario base concentra {formatar_moeda(resultado_verba['cenarios']['base']['verba_r$'])} "
@@ -761,11 +785,14 @@ def render_kpis(resultados: dict) -> None:
         badge_html(score["classificacao"], score["cor"]),
         unsafe_allow_html=True,
     )
-    if score.get("ajuste_macro") or score.get("ajuste_mercado_local"):
+    if score.get("ajuste_total"):
         st.caption(
             f"Score base: {score.get('score_base', score['score_final'])}/100 | "
             f"Ajuste macro: {score.get('ajuste_macro', 0):+.1f} | "
-            f"Ajuste mercado local: {score.get('ajuste_mercado_local', 0):+.1f}"
+            f"Mercado local: {score.get('ajuste_mercado_local', 0):+.1f} | "
+            f"FipeZap: {score.get('ajuste_fipezap', 0):+.1f} | "
+            f"RIB: {score.get('ajuste_rib', 0):+.1f} | "
+            f"Macro expandido: {score.get('ajuste_macro_expandido', 0):+.1f}"
         )
 
     fig_gauge = go.Figure(
@@ -794,6 +821,67 @@ def render_kpis(resultados: dict) -> None:
     st.plotly_chart(fig_gauge, use_container_width=True)
 
 
+def _metadata_tags_html(*valores: str) -> str:
+    tags = [valor for valor in valores if valor]
+    return " ".join(f"<span class='fonte-tag'>{item}</span>" for item in tags)
+
+
+def _bloco_contexto(titulo: str, takeaway: str, descricao: str = "", tags: str = "") -> None:
+    st.markdown(
+        f"""
+        <div class="context-shell">
+          <div class="context-kicker">{titulo}</div>
+          <div class="context-title">{takeaway}</div>
+          <div class="context-body">{descricao}</div>
+          <div style="margin-top:10px;">{tags}</div>
+        </div>
+        """,
+        unsafe_allow_html=True,
+    )
+
+
+def _card_insight(titulo: str, valor: str, detalhe: str, destaque: str = "#E8A020") -> None:
+    st.markdown(
+        f"""
+        <div style="background:#FFFFFF;border:1px solid #E5DDD0;border-top:3px solid {destaque};
+                    border-radius:12px;padding:18px;min-height:148px;box-shadow:0 4px 14px rgba(27,42,74,0.05);">
+          <div style="font-size:0.78rem;text-transform:uppercase;letter-spacing:0.08em;color:#6B7280;font-weight:700;">{titulo}</div>
+          <div style="font-size:1.6rem;color:#1B2A4A;font-weight:800;margin:10px 0 8px 0;">{valor}</div>
+          <div style="font-size:0.9rem;color:#6B7280;line-height:1.55;">{detalhe}</div>
+        </div>
+        """,
+        unsafe_allow_html=True,
+    )
+
+
+def _texto_fipezap(dados_fipezap: dict) -> str:
+    if not dados_fipezap.get("disponivel"):
+        return dados_fipezap.get("motivo", "FipeZap indisponivel.")
+    variacao = dados_fipezap.get("variacao_12m", 0)
+    if variacao > 8:
+        return f"Preco medio em alta de {variacao:.1f}% em 12 meses, sinal de mercado mais aquecido."
+    if variacao < 0:
+        return f"Preco medio em queda de {abs(variacao):.1f}% em 12 meses, o que pode alongar a decisao de compra."
+    return f"Preco medio com variacao moderada de {variacao:.1f}% em 12 meses."
+
+
+def _texto_rib(dados_rib: dict) -> str:
+    if not dados_rib.get("disponivel"):
+        return dados_rib.get("motivo", "RIB indisponivel.")
+    variacao = dados_rib.get("variacao_anual_pct", 0)
+    if variacao > 10:
+        return f"Registros de compra e venda crescem {variacao:.1f}% a/a, sugerindo mercado mais liquido."
+    if variacao < -5:
+        return f"Registros caem {abs(variacao):.1f}% a/a, indicando absorcao mais lenta."
+    return f"Registros seguem estaveis em torno da media recente de {dados_rib.get('media_mensal_12m', 0):,.0f}/mes."
+
+
+def _texto_pressao_custos(pressao: dict) -> str:
+    if pressao.get("interpretacao"):
+        return " ".join(pressao["interpretacao"])
+    return "INCC, IPCA e IGP-M estao em faixa sem pressao extrema na leitura atual."
+
+
 def render_contexto_macro_kpis(resultados: dict) -> None:
     dados_bcb = resultados["dados_publicos"]["bcb"]
     col1, col2, col3, col4 = st.columns(4)
@@ -803,10 +891,10 @@ def render_contexto_macro_kpis(resultados: dict) -> None:
         formatar_valor_contexto(dados_bcb.get("juros_imobiliario", {}).get("valor"), "pct"),
     )
     col3.metric(
-        "Credito Imobiliario",
-        formatar_valor_contexto(dados_bcb.get("concessoes_credito", {}).get("valor"), "bilhoes"),
+        "Inadimplencia",
+        formatar_valor_contexto(dados_bcb.get("inadimplencia_imobiliaria", {}).get("valor"), "pct"),
     )
-    col4.metric("INCC-DI", formatar_valor_contexto(dados_bcb.get("incc", {}).get("valor"), "pct"))
+    col4.metric("Unidades Financiadas", formatar_valor_contexto(dados_bcb.get("unidades_financiadas", {}).get("valor"), "numero"))
 
 
 def _texto_impacto_bcb(chave: str, valor: float | None) -> str:
@@ -859,7 +947,7 @@ def render_tab_score(resultados: dict) -> None:
             )
 
 
-    justificativas = resultados["resultado_score"].get("justificativa_macro", []) + resultados["resultado_score"].get("justificativa_mercado_local", [])
+    justificativas = resultados["resultado_score"].get("justificativas_contextuais", [])
     if justificativas:
         st.markdown("### Ajustes Contextuais")
         for texto in justificativas:
@@ -1030,33 +1118,169 @@ def render_tab_contexto_mercado(resultados: dict) -> None:
     dados_bcb = dados_publicos["bcb"]
     dados_ipea = dados_publicos["ipea"]
     dados_trends = dados_publicos["trends"]
-    favorabilidade = calcular_favorabilidade_mercado(dados_bcb, dados_ipea, dados_trends)
+    dados_fipezap = dados_publicos["fipezap"]
+    dados_rib = dados_publicos["rib"]
+    favorabilidade = calcular_favorabilidade_mercado(dados_bcb, dados_ipea, dados_trends, dados_fipezap, dados_rib)
+    pressao = calcular_pressao_custos(dados_bcb)
+    benchmark_uf = dados_bcb.get("mercado_imobiliario_uf", {})
 
-    st.markdown("### Cenário Macroeconômico Atual")
-    render_contexto_macro_kpis(resultados)
-    macro_cols = st.columns(3)
-    cards_macro = [
-        ("Selic", dados_bcb.get("selic", {}).get("valor"), "pct", _texto_impacto_bcb("selic", dados_bcb.get("selic", {}).get("valor"))),
-        ("Juros Financiamento", dados_bcb.get("juros_imobiliario", {}).get("valor"), "pct", _texto_impacto_bcb("juros_imobiliario", dados_bcb.get("juros_imobiliario", {}).get("valor"))),
-        ("IVG-R", dados_bcb.get("ivg_r", {}).get("valor"), "indice", _texto_impacto_bcb("ivg_r", dados_bcb.get("ivg_r", {}).get("valor"))),
-    ]
-    for idx, (titulo, valor, formato, texto) in enumerate(cards_macro):
-        with macro_cols[idx]:
-            card(
-                titulo,
-                f"<p style='font-size:1.25rem; font-weight:800; color:#1B2A4A;'>{formatar_valor_contexto(valor, formato)}</p><p style='margin:0; color:#6B7280;'>{texto}</p>",
-                cor_borda="#D6C5A0",
-                icone="📊",
+    _bloco_contexto(
+        "Leitura Executiva",
+        "Preco, liquidez, credito e demanda foram organizados para responder se o mercado ajuda a absorcao agora.",
+        (
+            "Os blocos abaixo seguem uma ordem de leitura mais util: primeiro os sinais locais de preco e transacao, "
+            "depois o pano de fundo de credito e custos, e por fim a demanda digital que pode acelerar ou frear a abertura."
+        ),
+        _metadata_tags_html(
+            f"Fontes ativas: {dados_publicos.get('fontes_ativas', 0)}/7",
+            f"Qualidade geral: {dados_publicos.get('qualidade_geral', 0):.0%}",
+        ),
+    )
+
+    st.markdown("### Bloco A — Precos e Mercado Local")
+    col_a1, col_a2 = st.columns(2)
+    with col_a1:
+        if dados_fipezap.get("disponivel"):
+            _card_insight("FipeZap", f"R$ {dados_fipezap['preco_medio_m2']:,.0f}/m²", _texto_fipezap(dados_fipezap))
+            fx1, fx2 = st.columns(2)
+            fx1.metric("Variacao mensal", f"{dados_fipezap['variacao_mensal']:+.2f}%")
+            fx2.metric("Variacao 12m", f"{dados_fipezap['variacao_12m']:+.1f}%")
+            st.markdown(
+                _metadata_tags_html(
+                    dados_fipezap.get("fonte"),
+                    f"Referencia: {dados_fipezap.get('data_referencia', 'N/D')}",
+                ),
+                unsafe_allow_html=True,
             )
+        else:
+            _card_insight("FipeZap", "Nao disponivel", dados_fipezap.get("motivo", "Cidade sem cobertura."), destaque="#D6C5A0")
+    with col_a2:
+        if dados_rib.get("disponivel"):
+            _card_insight("RIB / Registros", f"{dados_rib['compra_venda_mensal']:,.0f}/mes", _texto_rib(dados_rib), destaque="#1B2A4A")
+            rb1, rb2 = st.columns(2)
+            rb1.metric("Variacao a/a", f"{dados_rib['variacao_anual_pct']:+.1f}%")
+            rb2.metric("Media 12m", f"{dados_rib['media_mensal_12m']:,.0f}")
+            st.markdown(
+                _metadata_tags_html(
+                    dados_rib.get("fonte"),
+                    f"Referencia: {dados_rib.get('data_referencia', 'N/D')}",
+                ),
+                unsafe_allow_html=True,
+            )
+        else:
+            _card_insight("RIB / Registros", "Nao disponivel", dados_rib.get("motivo", "Municipio sem base local."), destaque="#D6C5A0")
 
-    st.caption("O detalhamento do interesse de busca e dos termos monitorados foi movido para a aba Mix de Midia.")
+    st.markdown("### Bloco B — Credito e Macro")
+    render_contexto_macro_kpis(resultados)
+    cols_macro = st.columns(4)
+    cards_macro = [
+        ("Ticket medio financiado", formatar_valor_contexto(dados_bcb.get("ticket_medio_financiado", {}).get("valor"), "moeda"), "Benchmark nacional de financiamento por unidade.", "#E8A020"),
+        ("IPCA 12m", formatar_valor_contexto(dados_bcb.get("ipca_12m", {}).get("valor"), "pct"), "Inflacao alta corrige renda mais devagar que o custo de vida.", "#1B2A4A"),
+        ("INCC-DI", formatar_valor_contexto(dados_bcb.get("incc", {}).get("valor"), "pct"), _texto_impacto_bcb("incc", dados_bcb.get("incc", {}).get("valor")), "#C46A3A"),
+        ("IGP-M 12m", formatar_valor_contexto(dados_bcb.get("igpm_12m", {}).get("valor"), "pct"), "Ajuda a ler pressao sobre aluguel e contratos imobiliarios.", "#D6C5A0"),
+    ]
+    for coluna, (titulo, valor, detalhe, cor) in zip(cols_macro, cards_macro):
+        with coluna:
+            _card_insight(titulo, valor, detalhe, destaque=cor)
 
-    st.markdown("### Índice de Favorabilidade do Mercado")
-    col_a, col_b = st.columns([1, 2])
-    col_a.metric("Favorabilidade", f"{favorabilidade['score']}/10")
-    col_b.markdown(
-        f"<div style='padding-top:8px; font-size:1rem; font-weight:700; color:#1B2A4A;'>{favorabilidade['classificacao']}</div>"
-        f"<div style='color:#6B7280; margin-top:6px;'>Leitura combinada de juros, emprego e demanda digital para avaliar o timing do lançamento.</div>",
+    col_b1, col_b2 = st.columns([1.2, 1.05])
+    with col_b1:
+        _card_insight("Pressao de custos", f"{pressao['pressao_incorporador']:+.1f} pts", _texto_pressao_custos(pressao), destaque="#C46A3A")
+        st.markdown(
+            _metadata_tags_html("BCB/SGS", f"INCC {pressao['incc']:.1f}%", f"IPCA {pressao['ipca']:.1f}%", f"IGP-M {pressao['igpm']:.1f}%"),
+            unsafe_allow_html=True,
+        )
+    with col_b2:
+        if benchmark_uf.get("disponivel"):
+            _card_insight(
+                f"Benchmark estadual {benchmark_uf.get('uf', '')}",
+                formatar_valor_contexto(benchmark_uf.get("valor_financiado"), "moeda"),
+                "Referencia estadual de credito usada como pano de fundo do mercado regional.",
+                destaque="#1B2A4A",
+            )
+            uf1, uf2 = st.columns(2)
+            uf1.metric("Unidades", formatar_valor_contexto(benchmark_uf.get("unidades_financiadas"), "numero"))
+            uf2.metric("LTV medio", formatar_valor_contexto(benchmark_uf.get("ltv_medio"), "pct"))
+            st.markdown(
+                _metadata_tags_html(
+                    benchmark_uf.get("fonte"),
+                    f"Referencia: {benchmark_uf.get('data_referencia', 'N/D')}",
+                ),
+                unsafe_allow_html=True,
+            )
+        else:
+            _card_insight("Benchmark estadual", "Nao disponivel", benchmark_uf.get("motivo", "UF sem benchmark carregado."), destaque="#D6C5A0")
+
+    st.markdown("### Bloco C — Demanda Digital")
+    col_c1, col_c2 = st.columns([1.35, 1.0])
+    with col_c1:
+        serie = dados_trends.get("serie_interesse", [])
+        if serie:
+            df_trends = pd.DataFrame(serie)
+            ultimo = df_trends.iloc[-1]
+            fig = go.Figure()
+            fig.add_trace(
+                go.Scatter(
+                    x=df_trends["data"],
+                    y=df_trends["interesse"],
+                    mode="lines",
+                    line=dict(color=CORES["azul_escuro"], width=3),
+                    fill="tozeroy",
+                    fillcolor="rgba(232,160,32,0.10)",
+                    hovertemplate="%{x}<br>Interesse: %{y:.0f}/100<extra></extra>",
+                )
+            )
+            fig.add_trace(
+                go.Scatter(
+                    x=[ultimo["data"]],
+                    y=[ultimo["interesse"]],
+                    mode="markers+text",
+                    marker=dict(size=10, color=CORES["dourado"]),
+                    text=[f"{ultimo['interesse']:.0f}"],
+                    textposition="top center",
+                    hoverinfo="skip",
+                )
+            )
+            fig.update_layout(
+                title="Interesse de busca em 12 meses",
+                paper_bgcolor=CORES["fundo"],
+                plot_bgcolor=CORES["fundo"],
+                height=320,
+                margin=dict(l=10, r=10, t=48, b=10),
+                xaxis_title="",
+                yaxis_title="Indice",
+            )
+            st.plotly_chart(fig, use_container_width=True, key="contexto_trends")
+        else:
+            st.info("Google Trends indisponivel no momento. O app usa fallback neutro quando esta fonte nao responde.")
+    with col_c2:
+        _card_insight(
+            "Google Trends",
+            f"{dados_trends.get('score_interesse', 50)}/100",
+            f"Tendencia recente: {dados_trends.get('tendencia_recente', 'indisponivel')}. Use esta leitura para dosar urgencia criativa e pressao comercial.",
+            destaque="#1B2A4A",
+        )
+        st.markdown(
+            _metadata_tags_html(
+                dados_trends.get("fonte", "Google Trends"),
+                f"Termos: {', '.join(dados_trends.get('termos', [])[:3]) or 'N/D'}",
+            ),
+            unsafe_allow_html=True,
+        )
+
+    st.markdown("### Indice de Favorabilidade do Mercado")
+    col_f1, col_f2 = st.columns([0.9, 2.1])
+    col_f1.metric("Favorabilidade", f"{favorabilidade['score']}/10")
+    col_f2.markdown(
+        f"""
+        <div class="context-shell" style="padding:18px;">
+          <div class="context-title" style="margin-top:0;">{favorabilidade['classificacao']}</div>
+          <div class="context-body">
+            Esta leitura combina juros, emprego, demanda digital, valorizacao de preco e liquidez registral
+            para responder se o momento ajuda ou dificulta a absorcao.
+          </div>
+        </div>
+        """,
         unsafe_allow_html=True,
     )
 

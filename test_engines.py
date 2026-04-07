@@ -1,3 +1,8 @@
+# Copyright (c) 2026 Brenna Carvalho.
+# All rights reserved.
+# This software is proprietary and part of a SaaS platform.
+# Unauthorized use, reproduction, or reverse engineering is prohibited.
+
 """Testes basicos para os motores de score e verba."""
 
 from modules.budget_engine import calcular_verba, calcular_vgv, faixa_score

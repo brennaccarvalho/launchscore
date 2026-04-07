@@ -1,3 +1,8 @@
+# Copyright (c) 2026 Brenna Carvalho.
+# All rights reserved.
+# This software is proprietary and part of a SaaS platform.
+# Unauthorized use, reproduction, or reverse engineering is prohibited.
+
 """Geracao de PDF executivo do LaunchScore."""
 
 from __future__ import annotations
@@ -15,6 +20,7 @@ from reportlab.lib.units import cm
 from reportlab.platypus import Image, PageBreak, Paragraph, SimpleDocTemplate, Spacer, Table, TableStyle
 
 from config import CORES_CENARIOS, PDF_RODAPE
+from modules.budget_engine import calcular_pressao_custos
 from modules.data_orchestrator import FONTES_DE_DADOS
 from modules.termos_de_uso import AUTORA, LINKEDIN
 
@@ -344,13 +350,16 @@ def _fontes_ativas_relatorio(styles) -> Table:
 def _contexto_cards(dados_publicos: dict, styles) -> Table:
     dados_bcb = dados_publicos["bcb"]
     dados_trends = dados_publicos["trends"]
+    dados_fipezap = dados_publicos.get("fipezap", {})
+    dados_rib = dados_publicos.get("rib", {})
 
     macro = _info_card(
         "Macroeconomia",
         (
             f"Selic em <b>{_numero(dados_bcb.get('selic', {}).get('valor'), sufixo='%')}</b>. "
-            f"Juros imobiliario em <b>{_numero(dados_bcb.get('juros_imobiliario', {}).get('valor'), sufixo='%')}</b> "
-            f"e INCC em <b>{_numero(dados_bcb.get('incc', {}).get('valor'), sufixo='%')}</b> ajudam a calibrar o apetite de compra."
+            f"Juros imobiliario em <b>{_numero(dados_bcb.get('juros_imobiliario', {}).get('valor'), sufixo='%')}</b>, "
+            f"IPCA em <b>{_numero(dados_bcb.get('ipca_12m', {}).get('valor'), sufixo='%')}</b> "
+            f"e INCC em <b>{_numero(dados_bcb.get('incc', {}).get('valor'), sufixo='%')}</b> ajudam a calibrar credito e margem."
         ),
         7.7 * cm,
         styles,
@@ -368,9 +377,59 @@ def _contexto_cards(dados_publicos: dict, styles) -> Table:
         styles,
         background=AMARELO_SUAVE,
     )
-    tabela = Table([[macro, digital]], colWidths=[7.9 * cm, 7.9 * cm])
+    local = _info_card(
+        "Mercado local",
+        (
+            f"FipeZap: <b>{_moeda_curta(dados_fipezap.get('preco_medio_m2'))}/m2</b>. "
+            f"RIB: <b>{_numero(dados_rib.get('compra_venda_mensal'), casas=0)}</b> registros de compra e venda no ultimo mes observado."
+        ) if dados_fipezap.get("disponivel") or dados_rib.get("disponivel") else "Sinais locais indisponiveis para esta cidade na base atual.",
+        7.7 * cm,
+        styles,
+        background=CREME,
+    )
+    tabela = Table([[macro, digital], [local, "" ]], colWidths=[7.9 * cm, 7.9 * cm])
     tabela.setStyle(TableStyle([("VALIGN", (0, 0), (-1, -1), "TOP")]))
     return tabela
+
+
+def _tabela_contexto_mercado(dados_publicos: dict, styles) -> Table:
+    dados_bcb = dados_publicos["bcb"]
+    dados_fipezap = dados_publicos.get("fipezap", {})
+    dados_rib = dados_publicos.get("rib", {})
+    linhas = [
+        ["Indicador", "Valor", "Fonte", "Leitura"],
+        [
+            "Preco medio/m2 (FipeZap)",
+            _moeda(dados_fipezap.get("preco_medio_m2")) if dados_fipezap.get("disponivel") else "N/D",
+            "FipeZap/FIPE",
+            f"{_numero(dados_fipezap.get('variacao_12m'), sufixo='%')} em 12m" if dados_fipezap.get("disponivel") else "Cidade fora da cobertura",
+        ],
+        [
+            "Transacoes registradas (RIB)",
+            f"{_numero(dados_rib.get('compra_venda_mensal'), casas=0)}/mes" if dados_rib.get("disponivel") else "N/D",
+            "RIB/FIPE",
+            f"{_numero(dados_rib.get('variacao_anual_pct'), sufixo='%')} a/a" if dados_rib.get("disponivel") else "Municipio fora da base local",
+        ],
+        [
+            "Selic",
+            _numero(dados_bcb.get("selic", {}).get("valor"), sufixo="% a.a."),
+            "BCB/SGS",
+            "Custo do credito",
+        ],
+        [
+            "Juros financiamento",
+            _numero(dados_bcb.get("juros_imobiliario", {}).get("valor"), sufixo="% a.a."),
+            "BCB/SGS",
+            "Acesso do comprador",
+        ],
+        [
+            "IPCA 12m",
+            _numero(dados_bcb.get("ipca_12m", {}).get("valor"), sufixo="%"),
+            "BCB/SGS",
+            "Poder de compra",
+        ],
+    ]
+    return _paragraph_table(linhas, [4.8 * cm, 3.0 * cm, 2.6 * cm, 5.8 * cm], styles, header_bg=AZUL)
 
 
 def _publico_insights(publico: dict, styles) -> Table:
@@ -548,6 +607,9 @@ def gerar_pdf(dados_completos: dict) -> bytes:
             colWidths=[8.1 * cm, 8.1 * cm],
         )
     )
+    story.append(Spacer(1, 0.24 * cm))
+    story.append(_p("Contexto de mercado", styles["LaunchH3"]))
+    story.append(_tabela_contexto_mercado(dados_publicos, styles))
     story.append(PageBreak())
 
     story.append(_p("3. Plano de ativacao", styles["LaunchH2"]))
@@ -624,6 +686,22 @@ def gerar_pdf(dados_completos: dict) -> bytes:
     story.append(_p("Panorama dos sinais externos considerados para deixar a recomendacao mais aderente ao momento do mercado.", styles["LaunchSubtitulo"]))
     story.append(Spacer(1, 0.1 * cm))
     story.append(_contexto_cards(dados_publicos, styles))
+    story.append(Spacer(1, 0.24 * cm))
+    pressao = calcular_pressao_custos(dados_publicos["bcb"])
+    story.append(
+        _card(
+            [
+                _p("Leitura de pressao de custos", styles["LaunchH3"]),
+                _p(
+                    " ".join(pressao["interpretacao"]) or "INCC, IPCA e IGP-M seguem sem pressao extrema na leitura atual.",
+                    styles["LaunchBody"],
+                ),
+            ],
+            16.2 * cm,
+            background=CREME,
+            border_color=CINZA_CLARO,
+        )
+    )
     story.append(Spacer(1, 0.24 * cm))
     story.append(
         _card(

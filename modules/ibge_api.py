@@ -1,3 +1,9 @@
+# Copyright (c) 2026 Brenna Carvalho.
+# All rights reserved.
+# This software is proprietary and part of a SaaS platform.
+# Unauthorized use, reproduction, or reverse engineering is prohibited.
+# Use of this service is subject to proprietary restrictions. Reverse engineering, scraping, or competitive usage is strictly prohibited.
+
 """Integracoes com BrasilAPI e IBGE para enriquecimento dos dados."""
 
 from __future__ import annotations

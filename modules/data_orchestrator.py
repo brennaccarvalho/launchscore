@@ -1,3 +1,8 @@
+# Copyright (c) 2026 Brenna Carvalho.
+# All rights reserved.
+# This software is proprietary and part of a SaaS platform.
+# Unauthorized use, reproduction, or reverse engineering is prohibited.
+
 """Orquestracao das fontes publicas do LaunchScore."""
 
 from __future__ import annotations
@@ -6,9 +11,11 @@ import concurrent.futures
 
 from modules.atlas_brasil import get_idhm
 from modules.bcb_api import get_dados_bcb
+from modules.fipezap_api import get_dados_fipezap
 from modules.google_trends_api import get_tendencia_busca
 from modules.ibge_api import get_dados_ibge
 from modules.ipea_api import get_dados_ipea
+from modules.rib_api import get_dados_rib
 
 FONTES_DE_DADOS = [
     {
@@ -223,21 +230,33 @@ FONTES_DE_DADOS = [
 ]
 
 
-def coletar_todos_dados(codigo_ibge: str, cidade: str, tipologia: str) -> dict:
+def _resultado_seguro(futuro: concurrent.futures.Future, fallback: dict) -> dict:
+    try:
+        resultado = futuro.result()
+        return resultado if isinstance(resultado, dict) else fallback
+    except Exception:
+        return fallback
+
+
+def coletar_todos_dados(codigo_ibge: str, cidade: str, uf: str, tipologia: str) -> dict:
     """Coleta dados de todas as fontes em paralelo com fallbacks isolados."""
 
-    with concurrent.futures.ThreadPoolExecutor(max_workers=5) as executor:
+    with concurrent.futures.ThreadPoolExecutor(max_workers=7) as executor:
         fut_ibge = executor.submit(get_dados_ibge, codigo_ibge)
-        fut_bcb = executor.submit(get_dados_bcb)
+        fut_bcb = executor.submit(get_dados_bcb, uf)
         fut_ipea = executor.submit(get_dados_ipea, codigo_ibge)
         fut_idhm = executor.submit(get_idhm, codigo_ibge)
         fut_trends = executor.submit(get_tendencia_busca, cidade, tipologia)
+        fut_fipezap = executor.submit(get_dados_fipezap, cidade, uf)
+        fut_rib = executor.submit(get_dados_rib, cidade, uf)
 
-        dados_ibge = fut_ibge.result()
-        dados_bcb = fut_bcb.result()
-        dados_ipea = fut_ipea.result()
-        dados_idhm = fut_idhm.result()
-        dados_trends = fut_trends.result()
+        dados_ibge = _resultado_seguro(fut_ibge, {"codigo_ibge": codigo_ibge})
+        dados_bcb = _resultado_seguro(fut_bcb, {})
+        dados_ipea = _resultado_seguro(fut_ipea, {})
+        dados_idhm = _resultado_seguro(fut_idhm, {})
+        dados_trends = _resultado_seguro(fut_trends, {})
+        dados_fipezap = _resultado_seguro(fut_fipezap, {"disponivel": False})
+        dados_rib = _resultado_seguro(fut_rib, {"disponivel": False})
 
     if dados_idhm.get("idhm") is not None and "idh" in dados_ibge:
         dados_ibge["idh"]["valor"] = dados_idhm["idhm"]
@@ -253,9 +272,11 @@ def coletar_todos_dados(codigo_ibge: str, cidade: str, tipologia: str) -> dict:
             dados_ipea.get("pib_percapita", {}).get("valor") is not None,
             dados_idhm.get("idhm") is not None,
             bool(dados_trends.get("serie_interesse")),
+            dados_fipezap.get("disponivel", False),
+            dados_rib.get("disponivel", False),
         ]
     )
-    qualidade_geral = fontes_ok / 5
+    qualidade_geral = fontes_ok / 7
 
     return {
         "ibge": dados_ibge,
@@ -263,12 +284,20 @@ def coletar_todos_dados(codigo_ibge: str, cidade: str, tipologia: str) -> dict:
         "ipea": dados_ipea,
         "idhm": dados_idhm,
         "trends": dados_trends,
+        "fipezap": dados_fipezap,
+        "rib": dados_rib,
         "qualidade_geral": qualidade_geral,
         "fontes_ativas": fontes_ok,
     }
 
 
-def calcular_favorabilidade_mercado(dados_bcb: dict, dados_ipea: dict, dados_trends: dict) -> dict:
+def calcular_favorabilidade_mercado(
+    dados_bcb: dict,
+    dados_ipea: dict,
+    dados_trends: dict,
+    dados_fipezap: dict | None = None,
+    dados_rib: dict | None = None,
+) -> dict:
     """Calcula um indice simples de favorabilidade para lancamento."""
 
     score = 5.0
@@ -293,6 +322,22 @@ def calcular_favorabilidade_mercado(dados_bcb: dict, dados_ipea: dict, dados_tre
         score += 1.0
     elif tendencia == "caindo":
         score -= 0.5
+
+    dados_fipezap = dados_fipezap or {}
+    if dados_fipezap.get("disponivel"):
+        variacao_12m = dados_fipezap.get("variacao_12m", 0)
+        if variacao_12m > 8:
+            score += 1.0
+        elif variacao_12m < 0:
+            score -= 1.0
+
+    dados_rib = dados_rib or {}
+    if dados_rib.get("disponivel"):
+        variacao_anual = dados_rib.get("variacao_anual_pct", 0)
+        if variacao_anual > 10:
+            score += 1.0
+        elif variacao_anual < -5:
+            score -= 1.0
 
     score = round(min(10, max(0, score)), 1)
     return {

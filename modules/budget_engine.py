@@ -1,3 +1,8 @@
+# Copyright (c) 2026 Brenna Carvalho.
+# All rights reserved.
+# This software is proprietary and part of a SaaS platform.
+# Unauthorized use, reproduction, or reverse engineering is prohibited.
+
 """Calculos de VGV, verba recomendada, cenarios e benchmarks."""
 
 from __future__ import annotations
@@ -7,6 +12,40 @@ from config import BENCHMARKS_SETOR, BENCHMARK_CPL, TABELA_VERBA, TAXA_CONVERSAO
 
 def calcular_vgv(valor_unidade: float, volume_unidades: int) -> float:
     return valor_unidade * volume_unidades
+
+
+def calcular_pressao_custos(dados_bcb: dict) -> dict:
+    """Calcula uma leitura simples de pressao de custos e aluguel."""
+
+    incc = float(dados_bcb.get("incc", {}).get("valor") or 0.0)
+    igpm = float(dados_bcb.get("igpm_12m", {}).get("valor") or 0.0)
+    ipca = float(dados_bcb.get("ipca_12m", {}).get("valor") or 0.0)
+    selic = float(dados_bcb.get("selic", {}).get("valor") or 0.0)
+
+    pressao_incorporador = incc - ipca
+    urgencia_locatario = igpm
+    interpretacao: list[str] = []
+    if pressao_incorporador > 3:
+        interpretacao.append(
+            f"INCC {incc:.1f}% vs IPCA {ipca:.1f}% indica custo de construcao acima da inflacao geral."
+        )
+    if urgencia_locatario > 8:
+        interpretacao.append(
+            f"IGP-M em {igpm:.1f}% sugere aluguel pressionado, o que pode elevar a urgencia de compra."
+        )
+    if selic > 12 and igpm > 8:
+        interpretacao.append(
+            "Juro alto com aluguel pressionado cria dilema para o comprador entre financiar caro ou seguir alugando caro."
+        )
+    return {
+        "incc": incc,
+        "igpm": igpm,
+        "ipca": ipca,
+        "selic": selic,
+        "pressao_incorporador": round(pressao_incorporador, 1),
+        "urgencia_locatario": round(urgencia_locatario, 1),
+        "interpretacao": interpretacao,
+    }
 
 
 def faixa_score(score: float) -> str:

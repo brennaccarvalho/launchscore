@@ -1,0 +1,338 @@
+[
+  {
+    "cidade_fipezap": "São Paulo",
+    "cidade_normalizada": "sao paulo",
+    "uf": "SP",
+    "codigo_ibge": "3550308"
+  },
+  {
+    "cidade_fipezap": "Barueri",
+    "cidade_normalizada": "barueri",
+    "uf": "SP",
+    "codigo_ibge": "3505708"
+  },
+  {
+    "cidade_fipezap": "Campinas",
+    "cidade_normalizada": "campinas",
+    "uf": "SP",
+    "codigo_ibge": "3509502"
+  },
+  {
+    "cidade_fipezap": "Diadema",
+    "cidade_normalizada": "diadema",
+    "uf": "SP",
+    "codigo_ibge": "3513801"
+  },
+  {
+    "cidade_fipezap": "Guarujá",
+    "cidade_normalizada": "guaruja",
+    "uf": "SP",
+    "codigo_ibge": "3518701"
+  },
+  {
+    "cidade_fipezap": "Guarulhos",
+    "cidade_normalizada": "guarulhos",
+    "uf": "SP",
+    "codigo_ibge": "3518800"
+  },
+  {
+    "cidade_fipezap": "Osasco",
+    "cidade_normalizada": "osasco",
+    "uf": "SP",
+    "codigo_ibge": "3534401"
+  },
+  {
+    "cidade_fipezap": "Praia Grande",
+    "cidade_normalizada": "praia grande",
+    "uf": "SP",
+    "codigo_ibge": "3541000"
+  },
+  {
+    "cidade_fipezap": "Ribeirão Preto",
+    "cidade_normalizada": "ribeirao preto",
+    "uf": "SP",
+    "codigo_ibge": "3543402"
+  },
+  {
+    "cidade_fipezap": "Santo André",
+    "cidade_normalizada": "santo andre",
+    "uf": "SP",
+    "codigo_ibge": "3547809"
+  },
+  {
+    "cidade_fipezap": "Santos",
+    "cidade_normalizada": "santos",
+    "uf": "SP",
+    "codigo_ibge": "3548500"
+  },
+  {
+    "cidade_fipezap": "São Bernardo do Campo",
+    "cidade_normalizada": "sao bernardo do campo",
+    "uf": "SP",
+    "codigo_ibge": "3548708"
+  },
+  {
+    "cidade_fipezap": "São Caetano do Sul",
+    "cidade_normalizada": "sao caetano do sul",
+    "uf": "SP",
+    "codigo_ibge": "3548807"
+  },
+  {
+    "cidade_fipezap": "São José do Rio Preto",
+    "cidade_normalizada": "sao jose do rio preto",
+    "uf": "SP",
+    "codigo_ibge": "3549805"
+  },
+  {
+    "cidade_fipezap": "São José dos Campos",
+    "cidade_normalizada": "sao jose dos campos",
+    "uf": "SP",
+    "codigo_ibge": "3549904"
+  },
+  {
+    "cidade_fipezap": "São Vicente",
+    "cidade_normalizada": "sao vicente",
+    "uf": "SP",
+    "codigo_ibge": "3551009"
+  },
+  {
+    "cidade_fipezap": "Rio de Janeiro",
+    "cidade_normalizada": "rio de janeiro",
+    "uf": "RJ",
+    "codigo_ibge": "3304557"
+  },
+  {
+    "cidade_fipezap": "Niterói",
+    "cidade_normalizada": "niteroi",
+    "uf": "RJ",
+    "codigo_ibge": "3303302"
+  },
+  {
+    "cidade_fipezap": "Belo Horizonte",
+    "cidade_normalizada": "belo horizonte",
+    "uf": "MG",
+    "codigo_ibge": "3106200"
+  },
+  {
+    "cidade_fipezap": "Betim",
+    "cidade_normalizada": "betim",
+    "uf": "MG",
+    "codigo_ibge": "3106705"
+  },
+  {
+    "cidade_fipezap": "Contagem",
+    "cidade_normalizada": "contagem",
+    "uf": "MG",
+    "codigo_ibge": "3118601"
+  },
+  {
+    "cidade_fipezap": "Porto Alegre",
+    "cidade_normalizada": "porto alegre",
+    "uf": "RS",
+    "codigo_ibge": "4314902"
+  },
+  {
+    "cidade_fipezap": "Canoas",
+    "cidade_normalizada": "canoas",
+    "uf": "RS",
+    "codigo_ibge": "4304606"
+  },
+  {
+    "cidade_fipezap": "Caxias do Sul",
+    "cidade_normalizada": "caxias do sul",
+    "uf": "RS",
+    "codigo_ibge": "4305108"
+  },
+  {
+    "cidade_fipezap": "Novo Hamburgo",
+    "cidade_normalizada": "novo hamburgo",
+    "uf": "RS",
+    "codigo_ibge": "4313409"
+  },
+  {
+    "cidade_fipezap": "Pelotas",
+    "cidade_normalizada": "pelotas",
+    "uf": "RS",
+    "codigo_ibge": "4314407"
+  },
+  {
+    "cidade_fipezap": "Santa Maria",
+    "cidade_normalizada": "santa maria",
+    "uf": "RS",
+    "codigo_ibge": "4316907"
+  },
+  {
+    "cidade_fipezap": "São Leopoldo",
+    "cidade_normalizada": "sao leopoldo",
+    "uf": "RS",
+    "codigo_ibge": "4318705"
+  },
+  {
+    "cidade_fipezap": "Curitiba",
+    "cidade_normalizada": "curitiba",
+    "uf": "PR",
+    "codigo_ibge": "4106902"
+  },
+  {
+    "cidade_fipezap": "Londrina",
+    "cidade_normalizada": "londrina",
+    "uf": "PR",
+    "codigo_ibge": "4113700"
+  },
+  {
+    "cidade_fipezap": "São José dos Pinhais",
+    "cidade_normalizada": "sao jose dos pinhais",
+    "uf": "PR",
+    "codigo_ibge": "4125506"
+  },
+  {
+    "cidade_fipezap": "Florianópolis",
+    "cidade_normalizada": "florianopolis",
+    "uf": "SC",
+    "codigo_ibge": "4205407"
+  },
+  {
+    "cidade_fipezap": "Balneário Camboriú",
+    "cidade_normalizada": "balneario camboriu",
+    "uf": "SC",
+    "codigo_ibge": "4202008"
+  },
+  {
+    "cidade_fipezap": "Blumenau",
+    "cidade_normalizada": "blumenau",
+    "uf": "SC",
+    "codigo_ibge": "4202404"
+  },
+  {
+    "cidade_fipezap": "Itajaí",
+    "cidade_normalizada": "itajai",
+    "uf": "SC",
+    "codigo_ibge": "4208203"
+  },
+  {
+    "cidade_fipezap": "Itapema",
+    "cidade_normalizada": "itapema",
+    "uf": "SC",
+    "codigo_ibge": "4208302"
+  },
+  {
+    "cidade_fipezap": "Joinville",
+    "cidade_normalizada": "joinville",
+    "uf": "SC",
+    "codigo_ibge": "4209102"
+  },
+  {
+    "cidade_fipezap": "São José",
+    "cidade_normalizada": "sao jose",
+    "uf": "SC",
+    "codigo_ibge": "4216602"
+  },
+  {
+    "cidade_fipezap": "Vitória",
+    "cidade_normalizada": "vitoria",
+    "uf": "ES",
+    "codigo_ibge": "3205309"
+  },
+  {
+    "cidade_fipezap": "Vila Velha",
+    "cidade_normalizada": "vila velha",
+    "uf": "ES",
+    "codigo_ibge": "3205200"
+  },
+  {
+    "cidade_fipezap": "Brasília",
+    "cidade_normalizada": "brasilia",
+    "uf": "DF",
+    "codigo_ibge": "5300108"
+  },
+  {
+    "cidade_fipezap": "Goiânia",
+    "cidade_normalizada": "goiania",
+    "uf": "GO",
+    "codigo_ibge": "5208707"
+  },
+  {
+    "cidade_fipezap": "Campo Grande",
+    "cidade_normalizada": "campo grande",
+    "uf": "MS",
+    "codigo_ibge": "5002704"
+  },
+  {
+    "cidade_fipezap": "Cuiabá",
+    "cidade_normalizada": "cuiaba",
+    "uf": "MT",
+    "codigo_ibge": "5103403"
+  },
+  {
+    "cidade_fipezap": "Aracaju",
+    "cidade_normalizada": "aracaju",
+    "uf": "SE",
+    "codigo_ibge": "2800308"
+  },
+  {
+    "cidade_fipezap": "Fortaleza",
+    "cidade_normalizada": "fortaleza",
+    "uf": "CE",
+    "codigo_ibge": "2304400"
+  },
+  {
+    "cidade_fipezap": "João Pessoa",
+    "cidade_normalizada": "joao pessoa",
+    "uf": "PB",
+    "codigo_ibge": "2507507"
+  },
+  {
+    "cidade_fipezap": "Maceió",
+    "cidade_normalizada": "maceio",
+    "uf": "AL",
+    "codigo_ibge": "2704302"
+  },
+  {
+    "cidade_fipezap": "Natal",
+    "cidade_normalizada": "natal",
+    "uf": "RN",
+    "codigo_ibge": "2408102"
+  },
+  {
+    "cidade_fipezap": "Recife",
+    "cidade_normalizada": "recife",
+    "uf": "PE",
+    "codigo_ibge": "2611606"
+  },
+  {
+    "cidade_fipezap": "Salvador",
+    "cidade_normalizada": "salvador",
+    "uf": "BA",
+    "codigo_ibge": "2927408"
+  },
+  {
+    "cidade_fipezap": "São Luís",
+    "cidade_normalizada": "sao luis",
+    "uf": "MA",
+    "codigo_ibge": "2111300"
+  },
+  {
+    "cidade_fipezap": "Teresina",
+    "cidade_normalizada": "teresina",
+    "uf": "PI",
+    "codigo_ibge": "2211001"
+  },
+  {
+    "cidade_fipezap": "Jaboatão dos Guararapes",
+    "cidade_normalizada": "jaboatao dos guararapes",
+    "uf": "PE",
+    "codigo_ibge": "2607901"
+  },
+  {
+    "cidade_fipezap": "Belém",
+    "cidade_normalizada": "belem",
+    "uf": "PA",
+    "codigo_ibge": "1501402"
+  },
+  {
+    "cidade_fipezap": "Manaus",
+    "cidade_normalizada": "manaus",
+    "uf": "AM",
+    "codigo_ibge": "1302603"
+  }
+]
