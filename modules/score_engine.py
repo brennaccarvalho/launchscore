@@ -88,7 +88,13 @@ def ajuste_mercado_local(score_base: float, dados_ipea: dict | None, dados_trend
     }
 
 
-def ajuste_fipezap(score_base: float, dados_fipezap: dict | None, valor_unidade: float | None) -> dict:
+def ajuste_fipezap(
+    score_base: float,
+    dados_fipezap: dict | None,
+    valor_unidade: float | None,
+    tipologia: str = "apartamentos",
+    area_m2: float | None = None,
+) -> dict:
     dados_fipezap = dados_fipezap or {}
     if not dados_fipezap.get("disponivel"):
         return {"ajuste": 0.0, "justificativa": ["FipeZap: dados nao disponiveis para esta cidade."]}
@@ -110,8 +116,13 @@ def ajuste_fipezap(score_base: float, dados_fipezap: dict | None, valor_unidade:
         ajuste += 2.0
         justificativas.append(f"Preco medio recuou {abs(variacao_12m):.1f}% em 12 meses e pode estimular espera do comprador (+2 pts)")
 
-    if valor_unidade and preco_m2_local > 0:
-        preco_estimado_m2 = valor_unidade / 60
+    # Comparacao de preco por m2 — aplicavel apenas a apartamentos.
+    # Para lotes, o preco/m2 de terreno nao e comparavel ao indice FipeZap residencial.
+    tipologia_norm = (tipologia or "apartamentos").strip().lower()
+    if tipologia_norm != "lotes" and valor_unidade and preco_m2_local > 0:
+        # Usa area informada pelo usuario; fallback para 65m2 (media IBGE apartamentos brasileiros)
+        area = area_m2 if (area_m2 and area_m2 > 0) else 65.0
+        preco_estimado_m2 = valor_unidade / area
         if preco_estimado_m2 > preco_m2_local * 1.3:
             ajuste += 2.0
             justificativas.append(
@@ -187,6 +198,8 @@ def calcular_score(
     dados_fipezap: dict | None = None,
     dados_rib: dict | None = None,
     valor_unidade: float | None = None,
+    tipologia: str = "apartamentos",
+    area_m2: float | None = None,
 ) -> dict:
     """Combina dados externos e atributos do produto em score final."""
 
@@ -220,7 +233,7 @@ def calcular_score(
     score_base = round(score_bruto * 10, 1)
     aj_macro = ajuste_macro(score_base, dados_bcb or {})
     aj_local = ajuste_mercado_local(score_base, dados_ipea, dados_trends)
-    aj_fipezap = ajuste_fipezap(score_base, dados_fipezap, valor_unidade)
+    aj_fipezap = ajuste_fipezap(score_base, dados_fipezap, valor_unidade, tipologia=tipologia, area_m2=area_m2)
     aj_rib = ajuste_rib(score_base, dados_rib)
     aj_macro_expand = ajuste_macro_expandido(score_base, dados_bcb or {}, valor_unidade)
     ajuste_total = (

@@ -79,12 +79,33 @@ BENCHMARK_CPL = {
     "apartamentos": {"conservador": 220, "base": 170, "agressivo": 130},
 }
 
+# Taxas de conversao (lead → venda) por tipologia e faixa de score.
+# Lotes tendem a ter conversao mais alta: ticket menor, decisao mais rapida,
+# reservas pre-lancamento sao comuns. Apartamentos tem ciclo mais longo.
 TAXA_CONVERSAO = {
-    "score_0_30": 0.025,
-    "score_31_50": 0.018,
-    "score_51_70": 0.013,
-    "score_71_100": 0.009,
+    "lotes": {
+        "score_0_30": 0.030,
+        "score_31_50": 0.022,
+        "score_51_70": 0.015,
+        "score_71_100": 0.010,
+    },
+    "apartamentos": {
+        "score_0_30": 0.020,
+        "score_31_50": 0.015,
+        "score_51_70": 0.011,
+        "score_71_100": 0.008,
+    },
 }
+
+# Nomes normalizados (sem acento, minusculo) das 27 capitais estaduais.
+# Usado para calcular multiplicador de CPL: capitais tem leilao de midia mais caro.
+CAPITAIS_ESTADUAIS_NORM = frozenset({
+    "rio branco", "maceio", "macapa", "manaus", "salvador", "fortaleza",
+    "brasilia", "vitoria", "goiania", "sao luis", "cuiaba", "campo grande",
+    "belo horizonte", "belem", "joao pessoa", "curitiba", "recife",
+    "teresina", "rio de janeiro", "natal", "porto alegre", "porto velho",
+    "boa vista", "florianopolis", "sao paulo", "aracaju", "palmas",
+})
 
 BENCHMARKS_SETOR = {
     "lotes": {"media_pct_vgv": 0.032, "range": "2,5% - 4,5%"},
@@ -102,7 +123,7 @@ CORES_CANAIS = {
     "Eventos/Plantao Digital": "#F5C84A",
     "LinkedIn Ads": "#0077B5",
     "CRM / E-mail Marketing": "#6B7280",
-    "Influenciadores / Conteudo": "#EC4899",
+    "Influenciadores / Conteudo": "#BE185D",
 }
 
 CORES_CENARIOS = {

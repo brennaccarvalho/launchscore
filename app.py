@@ -35,6 +35,18 @@ from modules.score_engine import calcular_score
 from modules.termos_de_uso import exibir_footer_termos, exibir_termos_modal, render_pagina_termos
 
 
+def sanitizar_html(texto: str) -> str:
+    """Escapa caracteres HTML em texto de entrada do usuario para prevenir XSS."""
+    return (
+        str(texto)
+        .replace("&", "&amp;")
+        .replace("<", "&lt;")
+        .replace(">", "&gt;")
+        .replace('"', "&quot;")
+        .replace("'", "&#x27;")
+    )
+
+
 st.set_page_config(layout="wide", page_title="LaunchScore")
 
 
@@ -111,6 +123,86 @@ def injetar_css() -> None:
   .context-body {
     color:#6B7280; font-size:0.92rem; line-height:1.55;
   }
+
+  /* ── Navegacao por etapas ── */
+  .step-nav {
+    display:flex; align-items:center; gap:0; margin:0 0 28px 0;
+    background:#FFFFFF; border:1px solid #E5DDD0; border-radius:12px;
+    overflow:hidden; box-shadow:0 2px 8px rgba(27,42,74,0.05);
+  }
+  .step-item {
+    flex:1; display:flex; align-items:center; gap:10px;
+    padding:14px 20px; cursor:pointer; border:none; background:transparent;
+    border-right:1px solid #E5DDD0; transition:background 0.15s;
+  }
+  .step-item:last-child { border-right:none; }
+  .step-item:hover { background:#F8F6F2; }
+  .step-active { background:#1B2A4A !important; }
+  .step-active .step-num { background:#E8A020; color:#1B2A4A; }
+  .step-active .step-label { color:#FFFFFF; }
+  .step-active .step-sub { color:#C7D2E2; }
+  .step-done .step-num { background:#16A34A; color:#FFFFFF; }
+  .step-num {
+    width:28px; height:28px; border-radius:50%; background:#E5DDD0; color:#6B7280;
+    font-size:0.78rem; font-weight:800; display:flex; align-items:center;
+    justify-content:center; flex-shrink:0;
+  }
+  .step-label { font-size:0.9rem; font-weight:700; color:#1B2A4A; line-height:1.2; }
+  .step-sub { font-size:0.75rem; color:#9CA3AF; margin-top:1px; }
+
+  /* ── Formulario ── */
+  .bloco-form {
+    background:#FFFFFF; border:1px solid #E5DDD0; border-radius:14px;
+    padding:24px 24px 20px 24px; box-shadow:0 2px 12px rgba(27,42,74,0.05);
+    height:100%;
+  }
+  .form-section-title {
+    font-size:0.72rem; font-weight:700; text-transform:uppercase;
+    letter-spacing:0.10em; color:#E8A020; margin:20px 0 12px 0;
+    padding-bottom:6px; border-bottom:1px solid #F0EDE8;
+  }
+  .form-section-title:first-child { margin-top:0; }
+  .input-hint {
+    font-size:0.76rem; color:#9CA3AF; margin:-8px 0 12px 0;
+  }
+
+  /* ── Slider customizado ── */
+  .slider-wrap {
+    background:#FAFAF9; border:1px solid #F0EDE8; border-radius:10px;
+    padding:12px 14px 4px 14px; margin-bottom:14px;
+  }
+  .slider-label {
+    font-weight:700; color:#1B2A4A; font-size:0.9rem; margin-bottom:2px;
+  }
+  .slider-desc {
+    color:#6B7280; font-size:0.76rem; line-height:1.4; margin-bottom:6px;
+  }
+  .slider-extremos {
+    display:flex; justify-content:space-between;
+    font-size:0.69rem; color:#9CA3AF; margin-bottom:-14px;
+  }
+
+  /* ── Sugestao de localizacao ── */
+  .suggestion-card {
+    background:#F0F9FF; border:1px solid #BAE6FD; border-left:4px solid #0EA5E9;
+    border-radius:8px; padding:10px 14px; margin:10px 0 4px 0;
+    font-size:0.82rem; color:#0C4A6E; line-height:1.5;
+  }
+  .suggestion-card strong { color:#0369A1; }
+
+  /* ── CTA area ── */
+  .cta-area {
+    background:linear-gradient(135deg,#F8F6F2,#FFFFFF);
+    border:1px solid #E5DDD0; border-top:2px solid #E8A020;
+    border-radius:10px; padding:16px 16px 12px 16px; margin-top:20px;
+  }
+  .cta-hint {
+    font-size:0.75rem; color:#9CA3AF; text-align:center; margin-bottom:10px;
+  }
+  .cta-hint a { color:#E8A020; font-weight:700; text-decoration:none; }
+
+  /* ── Radio oculto — navegacao usa HTML customizado ── */
+  div[data-testid="stRadio"] { display:none !important; }
 </style>
         """,
         unsafe_allow_html=True,
@@ -192,6 +284,31 @@ def badge_html(texto: str, cor: str) -> str:
     return f'<span class="badge-{cor}">{texto}</span>'
 
 
+def render_step_nav(etapa_ativa: str) -> None:
+    """Barra de progresso visual com 3 etapas."""
+    etapas = [
+        ("1", "Dados", "Empreendimento e atributos", "1. Dados do Empreendimento"),
+        ("2", "Processamento", "Coleta e calculo", "2. Processamento"),
+        ("3", "Dashboard", "Resultados e relatorio", "3. Dashboard de Resultados"),
+    ]
+    itens_html = ""
+    for num, label, sub, chave in etapas:
+        is_active = etapa_ativa == chave
+        etapas_keys = [e[3] for e in etapas]
+        is_done = etapas_keys.index(chave) < etapas_keys.index(etapa_ativa)
+        cls = "step-item step-active" if is_active else ("step-item step-done" if is_done else "step-item")
+        check = "✓" if is_done else num
+        itens_html += f"""
+        <div class="{cls}">
+          <div class="step-num">{check}</div>
+          <div>
+            <div class="step-label">{label}</div>
+            <div class="step-sub">{sub}</div>
+          </div>
+        </div>"""
+    st.markdown(f'<div class="step-nav">{itens_html}</div>', unsafe_allow_html=True)
+
+
 def slider_com_descricao(
     label: str,
     icone: str,
@@ -203,12 +320,10 @@ def slider_com_descricao(
 ) -> int:
     st.markdown(
         f"""
-    <div style="margin-bottom:4px;">
-      <span style="font-weight:700; color:#1B2A4A; font-size:0.95rem;">{icone} {label}</span><br>
-      <span style="color:#6B7280; font-size:0.8rem;">{descricao}</span>
-    </div>
-    <div style="display:flex; justify-content:space-between; font-size:0.72rem; color:#9CA3AF; margin-bottom:-12px;">
-      <span>{extremo_esq}</span><span>{extremo_dir}</span>
+    <div class="slider-wrap">
+      <div class="slider-label">{icone} {label}</div>
+      <div class="slider-desc">{descricao}</div>
+      <div class="slider-extremos"><span>{extremo_esq}</span><span>{extremo_dir}</span></div>
     </div>
         """,
         unsafe_allow_html=True,
@@ -710,6 +825,7 @@ def processar_dados(form_data: dict, ui=st) -> dict:
         dados_fipezap=dados_publicos["fipezap"],
         dados_rib=dados_publicos["rib"],
         valor_unidade=form_data["valor_unidade"],
+        tipologia=form_data["tipologia"],
     )
 
     vgv = calcular_vgv(form_data["valor_unidade"], form_data["volume_unidades"])
@@ -720,6 +836,8 @@ def processar_dados(form_data: dict, ui=st) -> dict:
         tipologia=form_data["tipologia"].lower(),
         volume_unidades=form_data["volume_unidades"],
         valor_unidade=form_data["valor_unidade"],
+        municipio=localizacao.get("municipio", ""),
+        uf=localizacao.get("uf", ""),
     )
 
     atualizar_progresso(82, mensagens[3], "Distribuindo a verba entre canais para os cenarios conservador, base e agressivo.")
@@ -760,6 +878,7 @@ def processar_dados(form_data: dict, ui=st) -> dict:
         "dados_ibge": dados_ibge,
         "dados_publicos": dados_publicos,
         "dados_normalizados": dados_normalizados,
+        "atributos": atributos,
         "resultado_score": resultado_score,
         "resultado_verba": resultado_verba,
         "perfil_publico": perfil_publico,
@@ -911,8 +1030,193 @@ def _texto_impacto_bcb(chave: str, valor: float | None) -> str:
     return "Indicador usado como contexto macro do mercado imobiliario."
 
 
+def _render_cobertura_ajustes(ajustes: dict) -> None:
+    """Mostra quais ajustes contextuais foram aplicados vs. zerados por falta de dados."""
+
+    GRUPOS = {
+        "macro": "Macro BCB (Selic, juros)",
+        "mercado_local": "Mercado Local (IPEA / Trends)",
+        "fipezap": "FipeZap (precos locais)",
+        "rib": "RIB (registros imoveis)",
+        "macro_expandido": "Macro Expandido (IPCA, inadimplencia)",
+    }
+    if not ajustes:
+        return
+
+    st.markdown("### Cobertura dos ajustes contextuais")
+    colunas = st.columns(len(GRUPOS))
+    for col, (chave, rotulo) in zip(colunas, GRUPOS.items()):
+        grupo = ajustes.get(chave, {})
+        valor = grupo.get("ajuste", 0.0)
+        tem_justificativa = bool(grupo.get("justificativa"))
+        indisponivel = tem_justificativa and any(
+            "nao disponivel" in j.lower() or "nao disponiveis" in j.lower()
+            for j in (grupo.get("justificativa") or [])
+        )
+        if indisponivel or not tem_justificativa:
+            cor_borda = "#E5DDD0"
+            icone = "—"
+            cor_valor = "#9CA3AF"
+            texto_status = "Sem dados / N/A"
+        elif valor == 0.0:
+            cor_borda = "#D1FAE5"
+            icone = "✓"
+            cor_valor = "#16A34A"
+            texto_status = "Neutro (0 pts)"
+        elif valor > 0:
+            cor_borda = "#FEE2E2"
+            icone = "▲"
+            cor_valor = "#DC2626"
+            texto_status = f"+{valor:.1f} pts"
+        else:
+            cor_borda = "#DCFCE7"
+            icone = "▼"
+            cor_valor = "#16A34A"
+            texto_status = f"{valor:.1f} pts"
+
+        with col:
+            st.markdown(
+                f"""
+                <div style="border:1px solid {cor_borda};border-radius:8px;padding:10px 12px;text-align:center;">
+                  <div style="font-size:1.2rem;">{icone}</div>
+                  <div style="font-size:0.72rem;font-weight:700;color:#1B2A4A;margin:4px 0 2px 0;">{rotulo}</div>
+                  <div style="font-size:0.85rem;font-weight:800;color:{cor_valor};">{texto_status}</div>
+                </div>
+                """,
+                unsafe_allow_html=True,
+            )
+
+
+_LABELS_ATRIBUTOS = {
+    "concorrencia": "Concorrencia",
+    "localizacao": "Localizacao",
+    "inovacao": "Inovacao do produto",
+    "tracao": "Tracão de demanda",
+    "funcionalidades": "Funcionalidades",
+    "conexao_luxo": "Conexao com luxo",
+}
+
+
+def render_simulador(resultados: dict) -> None:
+    """Recalcula o score em tempo real ao mover os sliders de atributos.
+
+    Usa os dados de mercado ja coletados (sem novas chamadas de API).
+    """
+    with st.expander("Simulador — ajuste os atributos e veja o impacto no score", expanded=False):
+        st.caption(
+            "Mova os sliders abaixo para simular cenarios alternativos. "
+            "O score e recalculado instantaneamente usando os mesmos dados de mercado coletados."
+        )
+        atributos_orig = resultados.get("atributos", {})
+        dados_normalizados = resultados["dados_normalizados"]
+        dados_publicos = resultados["dados_publicos"]
+        tipologia = resultados["empreendimento"]["tipologia"]
+        valor_unidade = resultados["empreendimento"]["valor_unidade"]
+        score_original = resultados["resultado_score"]["score_final"]
+
+        cols = st.columns(3)
+        sim_atributos = {}
+        for idx, (chave, rotulo) in enumerate(_LABELS_ATRIBUTOS.items()):
+            with cols[idx % 3]:
+                valor_orig = atributos_orig.get(chave, 3)
+                sim_atributos[chave] = st.slider(
+                    rotulo,
+                    min_value=1,
+                    max_value=5,
+                    value=valor_orig,
+                    key=f"sim_{chave}",
+                )
+
+        score_sim = calcular_score(
+            dados_normalizados,
+            sim_atributos,
+            dados_bcb=dados_publicos.get("bcb"),
+            dados_ipea=dados_publicos.get("ipea"),
+            dados_trends=dados_publicos.get("trends"),
+            dados_fipezap=dados_publicos.get("fipezap"),
+            dados_rib=dados_publicos.get("rib"),
+            valor_unidade=valor_unidade,
+            tipologia=tipologia,
+        )
+
+        score_novo = score_sim["score_final"]
+        delta = round(score_novo - score_original, 1)
+        classificacao_nova, cor_nova = score_sim["classificacao"], score_sim["cor"]
+
+        c1, c2, c3 = st.columns(3)
+        c1.metric("Score original", score_original)
+        c2.metric("Score simulado", score_novo, delta=f"{delta:+.1f} pts", delta_color="inverse")
+        c3.metric("Classificacao simulada", classificacao_nova)
+
+        if delta != 0:
+            top3_sim = sorted(
+                score_sim["breakdown"].items(),
+                key=lambda x: x[1]["contribuicao"],
+                reverse=True,
+            )[:3]
+            nomes = [n.replace("_", " ").title() for n, _ in top3_sim]
+            st.caption(f"Fatores que mais contribuem neste cenario: {', '.join(nomes)}.")
+
+
 def render_tab_score(resultados: dict) -> None:
     df_breakdown = montar_breakdown_df(resultados["resultado_score"])
+
+    # --- Painel: Score Objetivo vs Subjetivo ---
+    pesos_ibge = 0.45   # soma dos pesos IBGE em PESOS_SCORE
+    pesos_produto = 0.55  # soma dos pesos de atributos do usuario
+    contrib_ibge = df_breakdown[df_breakdown["Categoria"] == "Dados IBGE"]["Contribuicao"].sum()
+    contrib_prod = df_breakdown[df_breakdown["Categoria"] == "Atributos do empreendimento"]["Contribuicao"].sum()
+    # Normaliza cada componente para 0-100 dentro do seu proprio teto
+    score_obj_pct = round((contrib_ibge / pesos_ibge) * 10, 1) if pesos_ibge else 0
+    score_sub_pct = round((contrib_prod / pesos_produto) * 10, 1) if pesos_produto else 0
+    contrib_ibge_pts = round(contrib_ibge * 10, 1)
+    contrib_prod_pts = round(contrib_prod * 10, 1)
+
+    st.markdown("### Decomposicao do score")
+    c_obj, c_sep, c_sub = st.columns([5, 1, 5])
+    with c_obj:
+        st.markdown(
+            f"""
+            <div style="background:#EFF6FF;border:1px solid #BFDBFE;border-radius:10px;padding:14px 16px;">
+              <div style="font-size:0.75rem;font-weight:700;text-transform:uppercase;letter-spacing:0.08em;color:#1D4ED8;margin-bottom:6px;">
+                Contexto de Mercado
+              </div>
+              <div style="font-size:0.8rem;color:#6B7280;margin-bottom:4px;">Dados IBGE + macro (peso 45%)</div>
+              <div style="font-size:1.7rem;font-weight:800;color:#1B2A4A;">{score_obj_pct}/100</div>
+              <div style="font-size:0.82rem;color:#6B7280;margin-top:4px;">
+                Contribuicao ao score final: <strong>{contrib_ibge_pts} pts</strong>
+              </div>
+            </div>
+            """,
+            unsafe_allow_html=True,
+        )
+    with c_sep:
+        st.markdown(
+            "<div style='text-align:center;padding-top:28px;font-size:1.4rem;color:#6B7280;'>+</div>",
+            unsafe_allow_html=True,
+        )
+    with c_sub:
+        st.markdown(
+            f"""
+            <div style="background:#FFFBEB;border:1px solid #FDE68A;border-radius:10px;padding:14px 16px;">
+              <div style="font-size:0.75rem;font-weight:700;text-transform:uppercase;letter-spacing:0.08em;color:#B45309;margin-bottom:6px;">
+                Atributos do Produto
+              </div>
+              <div style="font-size:0.8rem;color:#6B7280;margin-bottom:4px;">Inputs do formulario (peso 55%)</div>
+              <div style="font-size:1.7rem;font-weight:800;color:#1B2A4A;">{score_sub_pct}/100</div>
+              <div style="font-size:0.82rem;color:#6B7280;margin-top:4px;">
+                Contribuicao ao score final: <strong>{contrib_prod_pts} pts</strong>
+              </div>
+            </div>
+            """,
+            unsafe_allow_html=True,
+        )
+    st.caption(
+        "Contexto de mercado reflete dados demograficos e macroeconomicos objetivos. "
+        "Atributos do produto refletem a avaliacao do empreendimento feita no formulario."
+    )
+    st.markdown("")
+
     fig = px.bar(
         df_breakdown.sort_values("Contribuicao"),
         x="Contribuicao",
@@ -946,12 +1250,18 @@ def render_tab_score(resultados: dict) -> None:
                 icone="⚠️",
             )
 
-
     justificativas = resultados["resultado_score"].get("justificativas_contextuais", [])
     if justificativas:
         st.markdown("### Ajustes Contextuais")
         for texto in justificativas:
             st.markdown(f"- {texto}")
+
+    # --- Cobertura dos ajustes contextuais ---
+    ajustes = resultados["resultado_score"].get("ajustes_contextuais", {})
+    _render_cobertura_ajustes(ajustes)
+
+    st.markdown("")
+    render_simulador(resultados)
 
 
 def render_tab_cenarios(resultados: dict) -> None:
@@ -981,6 +1291,14 @@ def render_tab_cenarios(resultados: dict) -> None:
                 unsafe_allow_html=True,
             )
 
+    multiplicador = resultados["resultado_verba"].get("multiplicador_praca", 1.0)
+    municipio = resultados["localizacao"].get("municipio", "")
+    if multiplicador > 1.0:
+        st.caption(
+            f"CPL ajustado por porte de praca: {municipio} aplica multiplicador "
+            f"{multiplicador:.1f}x sobre o benchmark nacional "
+            f"({'capital SP/RJ' if multiplicador == 1.5 else 'capital estadual'})."
+        )
     df_tabela = montar_tabela_cenarios(resultados)
     st.dataframe(df_tabela, use_container_width=True, hide_index=True)
     render_graficos_cenarios(cenarios)
@@ -1422,7 +1740,7 @@ def render_dashboard_story(resultados: dict) -> None:
         <div style="background:#FFFFFF; border:1px solid #E5DDD0; border-radius:12px; padding:18px 20px; box-shadow:0 2px 8px rgba(27,42,74,0.05);">
           <div style="font-size:1rem; font-weight:700; color:#1B2A4A; margin-bottom:8px;">Sintese executiva</div>
           <div style="font-size:0.95rem; color:#4B5563; line-height:1.65;">
-            O empreendimento <strong>{resultados['empreendimento']['nome']}</strong>, em
+            O empreendimento <strong>{sanitizar_html(resultados['empreendimento']['nome'])}</strong>, em
             <strong>{resultados['localizacao']['municipio']} - {resultados['localizacao']['uf']}</strong>,
             apresenta score de <strong>{score['score_final']}/100</strong>, classificado como
             <strong>{score['classificacao']}</strong>. O ponto de partida recomendado e o
@@ -1502,6 +1820,7 @@ def main() -> None:
     if "etapa_ativa" not in st.session_state:
         st.session_state["etapa_ativa"] = "1. Dados do Empreendimento"
 
+    # Radio oculto via CSS — mantido para compatibilidade de estado
     etapa_ativa = st.radio(
         "Navegacao",
         ["1. Dados do Empreendimento", "2. Processamento", "3. Dashboard de Resultados"],
@@ -1510,97 +1829,171 @@ def main() -> None:
         label_visibility="collapsed",
     )
     st.session_state["etapa_ativa"] = etapa_ativa
+    render_step_nav(etapa_ativa)
 
     if etapa_ativa == "1. Dados do Empreendimento":
-        col_left, col_right = st.columns(2)
-        with col_left:
-            st.markdown('<div class="bloco-form">', unsafe_allow_html=True)
-            st.markdown("## Dados do Empreendimento")
-            nome_empreendimento = st.text_input("Nome do empreendimento", placeholder="Ex: Vista Mar Residence")
-            cep = st.text_input("CEP do empreendimento", placeholder="00000-000", max_chars=9)
-            cidade_manual = st.text_input("Cidade (fallback)", placeholder="Ex: Fortaleza - CE")
-            tipologia = st.selectbox("Tipologia", ["Lotes", "Apartamentos"])
-            valor_unidade = st.number_input("Valor por unidade (R$)", min_value=50000, step=10000, value=650000)
-            volume_unidades = st.number_input("Numero de unidades", min_value=1, max_value=5000, step=1, value=120)
-            sugestao = obter_sugestao_localizacao(cep, cidade_manual)
-            if sugestao:
-                detalhes_localizacao = []
-                if sugestao.get("bairro"):
-                    detalhes_localizacao.append(f"Bairro identificado: {sugestao['bairro']}.")
-                if sugestao.get("rua"):
-                    detalhes_localizacao.append(f"Endereco de referencia: {sugestao['rua']}.")
-                st.info(
-                    f"Sugestao automatica de localizacao a partir do CEP/cidade: "
-                    f"{sugestao['score_sugerido']}/5. {sugestao['resumo']} "
-                    f"{' '.join(detalhes_localizacao)}"
-                )
-            st.markdown("</div>", unsafe_allow_html=True)
+        st.markdown(
+            """
+            <div style="background:linear-gradient(90deg,#F0EDE8,#FAF8F5);border:1px solid #E5DDD0;
+                        border-left:4px solid #E8A020;border-radius:10px;padding:12px 18px;
+                        margin-bottom:20px;display:flex;align-items:center;gap:12px;">
+              <div style="font-size:1.3rem;">📋</div>
+              <div>
+                <div style="font-size:0.9rem;font-weight:700;color:#1B2A4A;">
+                  Preencha os dados do lancamento para gerar o relatorio completo
+                </div>
+                <div style="font-size:0.78rem;color:#6B7280;margin-top:2px;">
+                  Coleta automatica de 7 fontes publicas · Score 0–100 · Verba recomendada · Mix de midia · PDF executivo
+                </div>
+              </div>
+            </div>
+            """,
+            unsafe_allow_html=True,
+        )
+        col_left, col_right = st.columns([1, 1], gap="medium")
 
+        # ── Coluna esquerda: dados do empreendimento ──
+        with col_left:
+            with st.container():
+                st.markdown('<div class="bloco-form">', unsafe_allow_html=True)
+
+                st.markdown('<div class="form-section-title">📋 Identificacao</div>', unsafe_allow_html=True)
+                nome_empreendimento = st.text_input(
+                    "Nome do empreendimento",
+                    placeholder="Ex: Vista Mar Residence",
+                )
+                tipologia = st.selectbox("Tipologia do produto", ["Lotes", "Apartamentos"])
+
+                st.markdown('<div class="form-section-title">📍 Localizacao</div>', unsafe_allow_html=True)
+                cep = st.text_input(
+                    "CEP",
+                    placeholder="00000-000",
+                    max_chars=9,
+                    help="Informe o CEP do terreno para geocodificacao automatica.",
+                )
+                cidade_manual = st.text_input(
+                    "Ou informe a cidade",
+                    placeholder="Ex: Fortaleza - CE",
+                    help="Usado como alternativa se o CEP nao for reconhecido.",
+                )
+
+                sugestao = obter_sugestao_localizacao(cep, cidade_manual)
+                if sugestao:
+                    detalhes = []
+                    if sugestao.get("bairro"):
+                        detalhes.append(f"Bairro: <strong>{sugestao['bairro']}</strong>.")
+                    if sugestao.get("rua"):
+                        detalhes.append(f"Ref: {sugestao['rua']}.")
+                    detalhe_str = " ".join(detalhes)
+                    st.markdown(
+                        f"""<div class="suggestion-card">
+                          📌 <strong>Sugestao de localizacao:</strong> {sugestao['score_sugerido']}/5 — {sugestao['resumo']}
+                          {(' ' + detalhe_str) if detalhe_str else ''}
+                        </div>""",
+                        unsafe_allow_html=True,
+                    )
+
+                st.markdown('<div class="form-section-title">💰 Produto e Volume</div>', unsafe_allow_html=True)
+                valor_unidade = st.number_input(
+                    "Valor por unidade (R$)",
+                    min_value=50_000,
+                    step=10_000,
+                    value=650_000,
+                    help="Valor medio de venda de cada unidade.",
+                )
+                volume_unidades = st.number_input(
+                    "Numero de unidades",
+                    min_value=1,
+                    max_value=5_000,
+                    step=1,
+                    value=120,
+                    help="Quantidade total de unidades a comercializar.",
+                )
+
+                st.markdown("</div>", unsafe_allow_html=True)
+
+        # ── Coluna direita: atributos (grid 2×3) ──
         with col_right:
-            st.markdown('<div class="bloco-form">', unsafe_allow_html=True)
-            st.markdown("## Atributos do Empreendimento")
-            concorrencia = slider_com_descricao(
-                "Concorrencia",
-                "🏁",
-                "Quantos empreendimentos similares estao sendo comercializados no mesmo raio de influencia",
-                "Mercado saturado",
-                "Sem concorrentes",
-                "concorrencia",
-            )
-            localizacao_default = sugestao["score_sugerido"] if sugestao else 3
-            localizacao = slider_com_descricao(
-                "Localizacao",
-                "📍",
-                "Qualidade da localizacao considerando acessibilidade, infraestrutura e percepcao de valor",
-                "Localizacao fraca",
-                "Localizacao premium",
-                "localizacao",
-                default=localizacao_default,
-            )
-            inovacao = slider_com_descricao(
-                "Inovacao",
-                "💡",
-                "O quanto o produto se diferencia do padrao de mercado em conceito, arquitetura ou proposta",
-                "Produto padrao",
-                "Altamente inovador",
-                "inovacao",
-            )
-            tracao = slider_com_descricao(
-                "Tracao",
-                "📈",
-                "Vendas ja realizadas, fila de espera, interesse comprovado ou historico de lancamentos anteriores",
-                "Sem tracao",
-                "Forte tracao",
-                "tracao",
-            )
-            funcionalidades = slider_com_descricao(
-                "Funcionalidades",
-                "⚙️",
-                "Quantidade e qualidade de diferenciais (lazer, tecnologia, sustentabilidade, acabamento)",
-                "Funcionalidades basicas",
-                "Produto completo",
-                "funcionalidades",
-            )
-            conexao_luxo = slider_com_descricao(
-                "Conexao com luxo",
-                "💎",
-                "Alinhamento do produto com o posicionamento premium ou aspiracional de mercado",
-                "Produto popular",
-                "Altamente aspiracional",
-                "conexao_luxo",
-            )
-            st.markdown(
-                """
-<p style="font-size:0.75rem; color:#9CA3AF; text-align:center; margin-top:8px;">
-  Ao calcular, voce concorda com os
-  <a href="?view=termos" target="_blank" style="color:#E8A020; font-weight:700; text-decoration:none;">Termos de Uso</a> da plataforma.
-</p>
-<br>
-                """,
-                unsafe_allow_html=True,
-            )
-            calcular = st.button("🚀 Calcular Score e Gerar Relatorio", type="primary", use_container_width=True)
-            st.markdown("</div>", unsafe_allow_html=True)
+            with st.container():
+                st.markdown('<div class="bloco-form">', unsafe_allow_html=True)
+                st.markdown('<div class="form-section-title">⚡ Atributos do Produto</div>', unsafe_allow_html=True)
+                st.markdown(
+                    '<p class="input-hint">Avalie cada atributo de 1 (pior) a 5 (melhor). '
+                    'Atributos positivos reduzem o score de dificuldade.</p>',
+                    unsafe_allow_html=True,
+                )
+
+                r1_col1, r1_col2 = st.columns(2)
+                with r1_col1:
+                    concorrencia = slider_com_descricao(
+                        "Concorrencia",
+                        "🏁",
+                        "Empreendimentos similares em comercializacao no mesmo raio",
+                        "Saturado",
+                        "Livre",
+                        "concorrencia",
+                    )
+                with r1_col2:
+                    localizacao_default = sugestao["score_sugerido"] if sugestao else 3
+                    localizacao = slider_com_descricao(
+                        "Localizacao",
+                        "📍",
+                        "Acessibilidade, infraestrutura e percepcao de valor do terreno",
+                        "Fraca",
+                        "Premium",
+                        "localizacao",
+                        default=localizacao_default,
+                    )
+
+                r2_col1, r2_col2 = st.columns(2)
+                with r2_col1:
+                    inovacao = slider_com_descricao(
+                        "Inovacao",
+                        "💡",
+                        "Diferenciacão em conceito, arquitetura ou proposta de valor",
+                        "Padrao",
+                        "Inovador",
+                        "inovacao",
+                    )
+                with r2_col2:
+                    tracao = slider_com_descricao(
+                        "Tracao",
+                        "📈",
+                        "Vendas, fila de espera ou interesse comprovado antes do lancamento",
+                        "Nenhuma",
+                        "Forte",
+                        "tracao",
+                    )
+
+                r3_col1, r3_col2 = st.columns(2)
+                with r3_col1:
+                    funcionalidades = slider_com_descricao(
+                        "Funcionalidades",
+                        "⚙️",
+                        "Lazer, tecnologia, sustentabilidade e qualidade de acabamento",
+                        "Basico",
+                        "Completo",
+                        "funcionalidades",
+                    )
+                with r3_col2:
+                    conexao_luxo = slider_com_descricao(
+                        "Aspiracional",
+                        "💎",
+                        "Alinhamento com posicionamento premium ou aspiracional",
+                        "Popular",
+                        "Aspiracional",
+                        "conexao_luxo",
+                    )
+
+                st.markdown(
+                    '<div class="cta-area">'
+                    '<div class="cta-hint">Ao calcular voce concorda com os '
+                    '<a href="?view=termos" target="_blank">Termos de Uso</a>.</div>',
+                    unsafe_allow_html=True,
+                )
+                calcular = st.button("Calcular Score e Gerar Relatorio", type="primary", use_container_width=True)
+                st.markdown("</div>", unsafe_allow_html=True)  # cta-area
+                st.markdown("</div>", unsafe_allow_html=True)  # bloco-form
 
         feedback_slot = col_right.empty()
 

@@ -7,7 +7,36 @@
 
 from __future__ import annotations
 
-from config import BENCHMARKS_SETOR, BENCHMARK_CPL, TABELA_VERBA, TAXA_CONVERSAO
+import unicodedata
+
+from config import BENCHMARKS_SETOR, BENCHMARK_CPL, CAPITAIS_ESTADUAIS_NORM, TABELA_VERBA, TAXA_CONVERSAO
+
+
+def _normalizar_nome(nome: str) -> str:
+    """Remove acentos e converte para minusculo para comparacao de nomes."""
+    return (
+        unicodedata.normalize("NFKD", str(nome))
+        .encode("ascii", "ignore")
+        .decode("ascii")
+        .lower()
+        .strip()
+    )
+
+
+def calcular_multiplicador_cpl(municipio: str, uf: str) -> float:
+    """Retorna multiplicador de CPL com base no porte da praca.
+
+    - SP/RJ capital: 1.5x (mercados digitais mais competitivos do pais)
+    - Outras capitais estaduais: 1.3x (leilao de midia mais caro que interior)
+    - Interior: 1.0x (baseline)
+    """
+    nome_norm = _normalizar_nome(municipio)
+    uf_upper = (uf or "").strip().upper()
+    if nome_norm in CAPITAIS_ESTADUAIS_NORM and uf_upper in ("SP", "RJ"):
+        return 1.5
+    if nome_norm in CAPITAIS_ESTADUAIS_NORM:
+        return 1.3
+    return 1.0
 
 
 def calcular_vgv(valor_unidade: float, volume_unidades: int) -> float:
@@ -81,21 +110,29 @@ def calcular_verba(
     tipologia: str,
     volume_unidades: int,
     valor_unidade: float,
+    municipio: str = "",
+    uf: str = "",
 ) -> dict:
-    """Calcula cenarios financeiros completos a partir do score."""
+    """Calcula cenarios financeiros completos a partir do score.
+
+    O CPL e ajustado pelo porte da praca: capitais pagam mais pelo leilao de midia.
+    A taxa de conversao varia por tipologia (lotes vs apartamentos).
+    """
 
     chave_tipologia = tipologia.strip().lower()
     faixa = faixa_score(score)
     referencia = TABELA_VERBA[chave_tipologia][faixa]
     benchmark_setor = BENCHMARKS_SETOR[chave_tipologia]
-    taxa_conversao = TAXA_CONVERSAO[faixa]
+    taxa_conversao = TAXA_CONVERSAO[chave_tipologia][faixa]
+    multiplicador_praca = calcular_multiplicador_cpl(municipio, uf)
 
     cenarios = {}
     for nome, campo in (("conservador", "min"), ("base", "base"), ("agressivo", "max")):
         percentual = referencia[campo]
         verba = vgv * percentual
         custo_unidade = verba / volume_unidades
-        cpl = BENCHMARK_CPL[chave_tipologia][nome]
+        cpl_base = BENCHMARK_CPL[chave_tipologia][nome]
+        cpl = round(cpl_base * multiplicador_praca)
         leads = verba / cpl if cpl else 0.0
         vendas = leads * taxa_conversao
         receita = vendas * valor_unidade
@@ -121,6 +158,7 @@ def calcular_verba(
         "custo_por_unidade_r$": base["custo_unidade"],
         "faixa_score": faixa,
         "taxa_conversao": taxa_conversao,
+        "multiplicador_praca": multiplicador_praca,
         "benchmark_setor": benchmark_setor,
         "cenarios": cenarios,
     }
