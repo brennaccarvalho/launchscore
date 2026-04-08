@@ -105,7 +105,10 @@ def injetar_css() -> None:
   .badge-amarelo { background:#FEF9C3; color:#854D0E; padding:4px 12px; border-radius:20px; font-weight:700; font-size:0.85rem; display:inline-block; }
   .badge-laranja { background:#FFEDD5; color:#9A3412; padding:4px 12px; border-radius:20px; font-weight:700; font-size:0.85rem; display:inline-block; }
   .badge-vermelho { background:#FEE2E2; color:#991B1B; padding:4px 12px; border-radius:20px; font-weight:700; font-size:0.85rem; display:inline-block; }
-  .fonte-tag { background:#F0EDE8; color:#6B7280; padding:2px 8px; border-radius:4px; font-size:0.72rem; border:1px solid #E5DDD0; display:inline-block; }
+  .fonte-tag {
+    background:#FFF7E8; color:#1B2A4A; padding:2px 8px; border-radius:4px;
+    font-size:0.72rem; border:1px solid #E8A020; display:inline-block; font-weight:700;
+  }
   .bloco-form {
     background: rgba(255,255,255,0.55); border: 1px solid #E5DDD0; border-radius: 12px; padding: 20px;
     box-shadow: 0 2px 8px rgba(27,42,74,0.04); min-height: 100%;
@@ -511,7 +514,7 @@ def render_bloco_interesse_busca(dados_trends: dict) -> None:
             st.plotly_chart(fig, use_container_width=True, key="trends_mix")
         else:
             detalhe_erro = dados_trends.get("erro")
-            texto = "Google Trends indisponivel no momento. O score usa fallback neutro quando essa fonte nao responde."
+            texto = "Google Trends indisponivel no momento. O score usa fallback neutro quando a integracao nao responde."
             if detalhe_erro:
                 texto = f"{texto} Detalhe tecnico: {detalhe_erro}"
             st.info(texto)
@@ -815,7 +818,7 @@ def processar_dados(form_data: dict, ui=st) -> dict:
         status_box = st.empty()
         progresso = st.progress(0, text="Iniciando processamento...")
     mensagens = [
-        "Consulta de dados publicos do municipio",
+        "Consulta inicial do municipio",
         "Calculo do score de dificuldade de venda",
         "Projecao de verba e cenarios de investimento",
         "Montagem do mix de midia recomendado",
@@ -850,7 +853,7 @@ def processar_dados(form_data: dict, ui=st) -> dict:
         atualizar_progresso(20, "Buscando cidade informada", "Usando a cidade digitada como fallback para encontrar o codigo IBGE correto.")
         localizacao = buscar_municipio_por_nome(form_data["cidade_manual"])
 
-    atualizar_progresso(35, mensagens[0], f"Coletando dados de mercado para {localizacao['municipio']} e consolidando as fontes disponiveis.")
+    atualizar_progresso(35, mensagens[0], f"Consolidando os indicadores para {localizacao['municipio']}.")
     dados_publicos = coletar_todos_dados(
         localizacao["codigo_ibge"],
         localizacao["municipio"],
@@ -1627,7 +1630,7 @@ def render_tab_contexto_mercado(resultados: dict) -> None:
             )
             st.plotly_chart(fig, use_container_width=True, key="contexto_trends")
         else:
-            st.info("Google Trends indisponivel no momento. O app usa fallback neutro quando esta fonte nao responde.")
+            st.info("Google Trends indisponivel no momento. O app usa fallback neutro quando a integracao nao responde.")
     with col_c2:
         _card_insight(
             "Google Trends",
