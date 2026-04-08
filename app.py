@@ -30,16 +30,10 @@ from modules.ibge_api import (
     sugerir_pontuacao_localizacao,
 )
 from modules.media_mix import BIBLIOTECA_CAMPANHAS, recomendar_mix
+from modules.price_elasticity import calcular_curva_elasticidade
 from modules.report_generator import gerar_pdf
 from modules.score_engine import calcular_score
 from modules.termos_de_uso import exibir_footer_termos, exibir_termos_modal, render_pagina_termos
-from modules.van_westendorp import (
-    CALIBRACAO_PADRAO,
-    TEMPLATE_EXEMPLO,
-    calcular_van_westendorp,
-    carregar_pesquisa_preco,
-    template_csv_bytes,
-)
 
 
 def sanitizar_html(texto: str) -> str:
@@ -1705,249 +1699,274 @@ def _linha_referencia_preco(fig: go.Figure, valor: float | None, rotulo: str, co
     )
 
 
-def _formatar_preco_ideal(valor: float | None) -> str:
-    if valor is None:
-        return "N/D"
-    return formatar_moeda(valor)
-
-
 def render_tab_preco_ideal(resultados: dict) -> None:
     st.markdown(
-        "<p style='color:#6B7280;'>Suba sua pesquisa de preco e simule a faixa aceitavel, o preco otimo classico e o ponto de maior receita pela extensao Newton-Miller-Smith.</p>",
+        "<p style='color:#6B7280;'>Veja o impacto de desconto, premio de tabela e incentivo comercial sobre demanda, sellout e receita no mesmo horizonte do cenario base.</p>",
         unsafe_allow_html=True,
     )
 
-    col_intro_a, col_intro_b = st.columns([1.25, 1.0])
+    preco_base = float(resultados["empreendimento"].get("valor_unidade") or 0)
+    estoque_total = int(resultados["empreendimento"].get("volume_unidades") or 0)
+    vendas_base_padrao = float(resultados["resultado_verba"]["cenarios"]["base"].get("vendas_estimadas") or 1.0)
+
+    col_intro_a, col_intro_b = st.columns([1.2, 1.0])
     with col_intro_a:
         st.markdown(
             """
             <div class="context-shell">
-              <div class="context-kicker">Preco ideal</div>
-              <div class="context-title">Emulador Van Westendorp</div>
+              <div class="context-kicker">Elasticidade</div>
+              <div class="context-title">Simulador de preco e desconto</div>
               <div class="context-body">
-                Use as colunas <strong>too_cheap</strong>, <strong>cheap</strong>, <strong>expensive</strong>,
-                <strong>too_expensive</strong>, <strong>pi_cheap</strong>, <strong>pi_expensive</strong> e
-                <strong>include</strong>. As notas de intencao seguem a calibracao 1-5 da planilha original.
+                Esta aba parte do ticket atual do produto e simula como a demanda pode reagir a descontos,
+                acrescimos de tabela e incentivos comerciais. O objetivo aqui nao e descobrir o "preco correto"
+                por pesquisa, e sim dar uma leitura rapida de <strong>volume vs. receita</strong> para tomada de decisao.
               </div>
             </div>
             """,
             unsafe_allow_html=True,
         )
     with col_intro_b:
-        st.download_button(
-            "Baixar template CSV do emulador",
-            data=template_csv_bytes(),
-            file_name="template_preco_ideal_launchscore.csv",
-            mime="text/csv",
-            use_container_width=True,
+        card(
+            "Base da simulacao",
+            (
+                f"<p><strong>Preco atual:</strong> {formatar_moeda(preco_base)}</p>"
+                f"<p><strong>Estoque:</strong> {estoque_total} unidades</p>"
+                f"<p><strong>Vendas base no periodo:</strong> {vendas_base_padrao:.1f}</p>"
+            ),
+            cor_borda="#E8A020",
+            icone="💲",
         )
 
-    upload = st.file_uploader(
-        "Pesquisa de preco (CSV ou XLSX)",
-        type=["csv", "xlsx"],
-        key="vw_upload",
-        help="Se preferir, use a tabela logo abaixo para colar algumas respostas manualmente.",
-    )
-
-    fonte_dados = "editor"
-    dados_base = TEMPLATE_EXEMPLO.copy()
-    if upload is not None:
-        try:
-            dados_base = carregar_pesquisa_preco(upload)
-            fonte_dados = "upload"
-            st.success(f"Arquivo carregado: {upload.name}")
-        except Exception as exc:
-            st.error(f"Nao foi possivel ler o arquivo enviado: {exc}")
-            return
-
-    if fonte_dados == "editor":
-        dados_pesquisa = st.data_editor(
-            dados_base,
-            num_rows="dynamic",
-            use_container_width=True,
-            key="vw_editor",
-        )
-    else:
-        st.dataframe(dados_base, use_container_width=True, hide_index=True)
-        dados_pesquisa = dados_base
-
-    valor_referencia = float(resultados["empreendimento"].get("valor_unidade") or 0)
-
-    with st.expander("Ajustes da simulacao", expanded=False):
-        col_cfg1, col_cfg2, col_cfg3 = st.columns(3)
+    with st.expander("Premissas da elasticidade", expanded=True):
+        col_cfg1, col_cfg2, col_cfg3, col_cfg4 = st.columns(4)
         with col_cfg1:
-            amplitude_sugerida = max(valor_referencia / 20, 1000) if valor_referencia else 10000
-            price_step = st.number_input(
-                "Passo entre precos simulados (R$)",
-                min_value=1000.0,
-                value=float(round(amplitude_sugerida / 1000) * 1000),
-                step=1000.0,
-                key="vw_price_step",
+            elasticidade = st.slider(
+                "Elasticidade-preco",
+                min_value=0.3,
+                max_value=3.0,
+                value=1.4,
+                step=0.1,
+                help="Quanto maior, mais sensivel a demanda fica a mudancas de preco.",
             )
         with col_cfg2:
-            factor_too_cheap = st.number_input(
-                "Fator abaixo do too cheap",
+            desconto_max_pct = st.slider(
+                "Desconto maximo",
                 min_value=0.0,
-                max_value=1.5,
-                value=1.0,
-                step=0.1,
-                key="vw_factor_too_cheap",
+                max_value=0.3,
+                value=0.12,
+                step=0.01,
+                format="%.0f%%",
             )
         with col_cfg3:
-            factor_too_expensive = st.number_input(
-                "Fator no too expensive",
+            acrescimo_max_pct = st.slider(
+                "Acrescimo maximo",
                 min_value=0.0,
-                max_value=1.5,
-                value=0.0,
-                step=0.1,
-                key="vw_factor_too_expensive",
+                max_value=0.2,
+                value=0.08,
+                step=0.01,
+                format="%.0f%%",
+            )
+        with col_cfg4:
+            passo_pct = st.slider(
+                "Granularidade",
+                min_value=0.01,
+                max_value=0.05,
+                value=0.01,
+                step=0.01,
+                format="%.0f%%",
             )
 
-        st.caption("Calibracao padrao da intencao de compra usada na planilha original.")
-        cols_cal = st.columns(5)
-        calibracao = {}
-        for idx, nota in enumerate(sorted(CALIBRACAO_PADRAO)):
-            with cols_cal[idx]:
-                calibracao[nota] = st.number_input(
-                    f"Nota {nota}",
-                    min_value=0.0,
-                    max_value=1.0,
-                    value=float(CALIBRACAO_PADRAO[nota]),
-                    step=0.05,
-                    key=f"vw_cal_{nota}",
-                )
+        col_cfg5, col_cfg6, col_cfg7 = st.columns(3)
+        with col_cfg5:
+            vendas_base = st.number_input(
+                "Vendas base no periodo",
+                min_value=1.0,
+                value=max(vendas_base_padrao, 1.0),
+                step=1.0,
+                help="Ponto de partida da demanda no mesmo horizonte do cenario base.",
+            )
+        with col_cfg6:
+            custo_incentivo_pct = st.slider(
+                "Incentivo comercial adicional",
+                min_value=0.0,
+                max_value=0.1,
+                value=0.02,
+                step=0.005,
+                format="%.1f%%",
+                help="Custo extra equivalente para ITBI, documentacao, cashback ou beneficio comercial.",
+            )
+        with col_cfg7:
+            eficiencia_incentivo = st.slider(
+                "Eficiencia do incentivo",
+                min_value=0.0,
+                max_value=1.0,
+                value=0.5,
+                step=0.05,
+                help="Quanto desse incentivo o cliente percebe como desconto de fato.",
+            )
 
-    try:
-        simulacao = calcular_van_westendorp(
-            dados_pesquisa,
-            price_step=price_step,
-            calibration=calibracao,
-            factor_too_expensive=factor_too_expensive,
-            factor_too_cheap=factor_too_cheap,
-        )
-    except Exception as exc:
-        st.error(f"Nao foi possivel rodar a simulacao: {exc}")
-        return
+    simulacao = calcular_curva_elasticidade(
+        preco_base=preco_base,
+        vendas_base=vendas_base,
+        estoque_total=estoque_total,
+        elasticidade=elasticidade,
+        desconto_max_pct=desconto_max_pct,
+        acrescimo_max_pct=acrescimo_max_pct,
+        custo_incentivo_pct=custo_incentivo_pct,
+        eficiencia_incentivo=eficiencia_incentivo,
+        passo_pct=passo_pct,
+    )
 
-    curvas = simulacao["curvas"]
+    curva = simulacao["curva"]
     resumo = simulacao["resumo"]
+    linha_base = curva.iloc[(curva["variacao_pct"] - 0).abs().argsort()[:1]].iloc[0]
 
     m1, m2, m3, m4 = st.columns(4)
-    m1.metric("Preco otimo classico", _formatar_preco_ideal(resumo["preco_otimo_classico"]))
-    m2.metric("Faixa aceitavel", f"{_formatar_preco_ideal(resumo['faixa_aceitavel_min'])} a {_formatar_preco_ideal(resumo['faixa_aceitavel_max'])}")
-    m3.metric("Pico de receita simulada", _formatar_preco_ideal(resumo["preco_otimo_receita"]))
-    m4.metric("Respostas validas", f"{resumo['n_respostas']}")
+    m1.metric("Preco base", formatar_moeda(resumo["preco_base"]))
+    m2.metric(
+        "Melhor preco p/ receita",
+        formatar_moeda(resumo["melhor_preco_receita"]),
+        delta=f"{resumo['melhor_variacao_receita']:+.1%}",
+    )
+    m3.metric(
+        "Melhor preco p/ volume",
+        formatar_moeda(resumo["melhor_preco_volume"]),
+        delta=f"{resumo['melhor_variacao_volume']:+.1%}",
+    )
+    m4.metric("Receita base", formatar_moeda(resumo["receita_base"]))
 
-    fig_curvas = go.Figure()
-    mapa_curvas = {
-        "Muito barato": ("too_cheap", "#F59E0B"),
-        "Barato": ("cheap", "#10B981"),
-        "Caro": ("expensive", "#2563EB"),
-        "Muito caro": ("too_expensive", "#DC2626"),
-    }
-    for nome, (coluna, cor) in mapa_curvas.items():
-        fig_curvas.add_trace(
-            go.Scatter(
-                x=curvas["price"],
-                y=curvas[coluna],
-                mode="lines",
-                name=nome,
-                line=dict(color=cor, width=3),
-                hovertemplate="Preco: R$ %{x:,.0f}<br>Curva: %{y:.1%}<extra></extra>",
-            )
+    fig_receita = go.Figure()
+    fig_receita.add_trace(
+        go.Scatter(
+            x=curva["preco_tabela"],
+            y=curva["vendas_estimadas"],
+            mode="lines",
+            name="Vendas estimadas",
+            line=dict(color="#1B2A4A", width=3),
+            hovertemplate="Preco: R$ %{x:,.0f}<br>Vendas: %{y:.1f}<extra></extra>",
         )
-
-    _linha_referencia_preco(fig_curvas, resumo["preco_otimo_classico"], "Preco otimo classico", "#111827")
-    _linha_referencia_preco(fig_curvas, resumo["preco_otimo_receita"], "Pico de receita", "#7C3AED")
-    _linha_referencia_preco(fig_curvas, valor_referencia, "Ticket atual", CORES["dourado"])
-    fig_curvas.update_layout(
-        title="Curvas classicas de sensibilidade a preco",
+    )
+    fig_receita.add_trace(
+        go.Scatter(
+            x=curva["preco_tabela"],
+            y=curva["sellout_pct"],
+            mode="lines",
+            name="Sellout do estoque",
+            line=dict(color="#E8A020", width=2, dash="dash"),
+            yaxis="y2",
+            hovertemplate="Preco: R$ %{x:,.0f}<br>Sellout: %{y:.1%}<extra></extra>",
+        )
+    )
+    _linha_referencia_preco(fig_receita, resumo["melhor_preco_volume"], "Melhor volume", "#16A34A")
+    _linha_referencia_preco(fig_receita, preco_base, "Preco atual", CORES["dourado"])
+    fig_receita.update_layout(
+        title="Elasticidade de demanda por nivel de preco",
         paper_bgcolor=CORES["fundo"],
         plot_bgcolor=CORES["fundo"],
         height=420,
-        yaxis_tickformat=".0%",
-        yaxis_title="Respondentes acumulados",
-        xaxis_title="Preco",
-        legend_title_text="Curvas",
+        xaxis_title="Preco de tabela",
+        yaxis=dict(title="Vendas estimadas"),
+        yaxis2=dict(title="Sellout", overlaying="y", side="right", tickformat=".0%", showgrid=False),
+        legend_title_text="Leituras",
     )
-    st.plotly_chart(fig_curvas, use_container_width=True, key="vw_curvas")
+    st.plotly_chart(fig_receita, use_container_width=True, key="elasticidade_demanda")
 
-    fig_sim = go.Figure()
-    fig_sim.add_trace(
-        go.Scatter(
-            x=curvas["price"],
-            y=curvas["purchase_intent"],
-            mode="lines",
-            name="Intencao media de compra",
-            line=dict(color="#1B2A4A", width=3),
-            hovertemplate="Preco: R$ %{x:,.0f}<br>Intencao: %{y:.1%}<extra></extra>",
-        )
-    )
-    fig_sim.add_trace(
-        go.Scatter(
-            x=curvas["price"],
-            y=curvas["reach"],
-            mode="lines",
-            name="% na faixa aceitavel",
-            line=dict(color="#E8A020", width=2, dash="dash"),
-            hovertemplate="Preco: R$ %{x:,.0f}<br>Reach: %{y:.1%}<extra></extra>",
-        )
-    )
-    fig_sim.add_trace(
+    fig_receita_liq = go.Figure()
+    fig_receita_liq.add_trace(
         go.Bar(
-            x=curvas["price"],
-            y=curvas["revenue_index"],
-            name="Indice de receita",
-            marker_color="rgba(124,58,237,0.22)",
-            yaxis="y2",
-            hovertemplate="Preco: R$ %{x:,.0f}<br>Indice: %{y:,.0f}<extra></extra>",
+            x=curva["preco_tabela"],
+            y=curva["receita_liquida"],
+            name="Receita liquida",
+            marker_color="rgba(27,42,74,0.28)",
+            hovertemplate="Preco: R$ %{x:,.0f}<br>Receita: R$ %{y:,.0f}<extra></extra>",
         )
     )
-    _linha_referencia_preco(fig_sim, resumo["preco_otimo_receita"], "Pico de receita", "#7C3AED")
-    _linha_referencia_preco(fig_sim, valor_referencia, "Ticket atual", CORES["dourado"])
-    fig_sim.update_layout(
-        title="Emulador de intencao, reach e receita",
+    fig_receita_liq.add_trace(
+        go.Scatter(
+            x=curva["preco_tabela"],
+            y=curva["fator_demanda"],
+            mode="lines",
+            name="Multiplicador de demanda",
+            line=dict(color="#7C3AED", width=3),
+            yaxis="y2",
+            hovertemplate="Preco: R$ %{x:,.0f}<br>Fator demanda: %{y:.2f}x<extra></extra>",
+        )
+    )
+    _linha_referencia_preco(fig_receita_liq, resumo["melhor_preco_receita"], "Melhor receita", "#7C3AED")
+    _linha_referencia_preco(fig_receita_liq, preco_base, "Preco atual", CORES["dourado"])
+    fig_receita_liq.update_layout(
+        title="Receita liquida e resposta de demanda",
         paper_bgcolor=CORES["fundo"],
         plot_bgcolor=CORES["fundo"],
         height=430,
-        xaxis_title="Preco",
-        yaxis=dict(title="Intencao / Reach", tickformat=".0%"),
-        yaxis2=dict(title="Indice de receita", overlaying="y", side="right", showgrid=False),
+        xaxis_title="Preco de tabela",
+        yaxis=dict(title="Receita liquida"),
+        yaxis2=dict(title="Fator de demanda", overlaying="y", side="right", showgrid=False),
         barmode="overlay",
         legend_title_text="Simulacao",
     )
-    st.plotly_chart(fig_sim, use_container_width=True, key="vw_sim")
+    st.plotly_chart(fig_receita_liq, use_container_width=True, key="elasticidade_receita")
 
     col_sel_a, col_sel_b = st.columns([1.0, 1.6])
     with col_sel_a:
         preco_escolhido = st.number_input(
-            "Emular um preco especifico (R$)",
-            min_value=float(curvas["price"].min()),
-            max_value=float(curvas["price"].max()),
-            value=float(resumo["preco_otimo_receita"]),
-            step=float(simulacao["price_step"]),
-            key="vw_preco_escolhido",
+            "Simular preco especifico (R$)",
+            min_value=float(curva["preco_tabela"].min()),
+            max_value=float(curva["preco_tabela"].max()),
+            value=float(resumo["melhor_preco_receita"]),
+            step=max(float(preco_base * passo_pct), 1000.0),
+            key="elasticidade_preco_escolhido",
         )
-        linha = curvas.iloc[(curvas["price"] - preco_escolhido).abs().argsort()[:1]].iloc[0]
-        st.metric("Intencao media", f"{linha['purchase_intent']:.1%}")
-        st.metric("Reach aceitavel", f"{linha['reach']:.1%}")
-        st.metric("Indice de receita", f"{linha['revenue_index']:,.0f}")
+        linha = curva.iloc[(curva["preco_tabela"] - preco_escolhido).abs().argsort()[:1]].iloc[0]
+        st.metric("Vendas estimadas", f"{linha['vendas_estimadas']:.1f}")
+        st.metric("Receita liquida", formatar_moeda(linha["receita_liquida"]))
+        st.metric("Sellout", f"{linha['sellout_pct']:.1%}")
     with col_sel_b:
         resumo_df = pd.DataFrame(
             [
-                {"Indicador": "Ponto de marginal cheapness (PMC)", "Valor": _formatar_preco_ideal(resumo["faixa_aceitavel_min"])},
-                {"Indicador": "Optimal Price Point (OPP)", "Valor": _formatar_preco_ideal(resumo["preco_otimo_classico"])},
-                {"Indicador": "Indifference Price Point (IDP)", "Valor": _formatar_preco_ideal(resumo["preco_indiferenca"])},
-                {"Indicador": "Point of marginal expensiveness (PME)", "Valor": _formatar_preco_ideal(resumo["faixa_aceitavel_max"])},
-                {"Indicador": "Preco de maior receita simulada", "Valor": _formatar_preco_ideal(resumo["preco_otimo_receita"])},
-                {"Indicador": "Preco de maior intencao", "Valor": _formatar_preco_ideal(resumo["preco_maior_intencao"])},
+                {"Indicador": "Preco base", "Valor": formatar_moeda(linha_base["preco_tabela"])},
+                {"Indicador": "Vendas base", "Valor": f"{linha_base['vendas_estimadas']:.1f}"},
+                {"Indicador": "Melhor preco para receita", "Valor": formatar_moeda(resumo["melhor_preco_receita"])},
+                {"Indicador": "Variacao no melhor preco de receita", "Valor": f"{resumo['melhor_variacao_receita']:+.1%}"},
+                {"Indicador": "Melhor preco para volume", "Valor": formatar_moeda(resumo["melhor_preco_volume"])},
+                {"Indicador": "Variacao no melhor preco de volume", "Valor": f"{resumo['melhor_variacao_volume']:+.1%}"},
             ]
         )
         st.dataframe(resumo_df, use_container_width=True, hide_index=True)
 
+    top_cenarios = curva.copy()
+    top_cenarios["impacto_vs_base"] = top_cenarios["receita_liquida"] - resumo["receita_base"]
+    top_cenarios = top_cenarios.sort_values("receita_liquida", ascending=False).head(5)
+    st.markdown("### Faixas mais promissoras")
+    st.dataframe(
+        top_cenarios[
+            [
+                "preco_tabela",
+                "desconto_pct",
+                "incentivo_pct",
+                "vendas_estimadas",
+                "sellout_pct",
+                "receita_liquida",
+                "impacto_vs_base",
+            ]
+        ].rename(
+            columns={
+                "preco_tabela": "Preco",
+                "desconto_pct": "Desconto",
+                "incentivo_pct": "Incentivo",
+                "vendas_estimadas": "Vendas",
+                "sellout_pct": "Sellout",
+                "receita_liquida": "Receita liquida",
+                "impacto_vs_base": "Impacto vs base",
+            }
+        ),
+        use_container_width=True,
+        hide_index=True,
+    )
+
     st.caption(
-        "Leitura rapida: OPP resume a leitura classica do Van Westendorp, enquanto o pico de receita usa a extensao "
-        "Newton-Miller-Smith para ponderar intencao de compra ao longo da curva de preco."
+        "Assumimos uma curva isoelastica simplificada: desconto e incentivo reduzem o preco percebido, a demanda reage conforme a elasticidade escolhida "
+        "e a receita liquida desconta o custo do incentivo comercial. Use esta aba como leitura tatico-comercial, nao como precificacao estatistica definitiva."
     )
 
 
@@ -1969,6 +1988,7 @@ def render_dashboard(resultados: dict) -> None:
             "💰 Projecao de Cenarios",
             "📡 Mix de Midia",
             "👥 Publico-Alvo",
+            "💲 Elasticidade de Preco",
             "📈 Contexto de Mercado",
             "📋 Dados Utilizados",
         ]
