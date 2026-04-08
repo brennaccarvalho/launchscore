@@ -33,6 +33,13 @@ from modules.media_mix import BIBLIOTECA_CAMPANHAS, recomendar_mix
 from modules.report_generator import gerar_pdf
 from modules.score_engine import calcular_score
 from modules.termos_de_uso import exibir_footer_termos, exibir_termos_modal, render_pagina_termos
+from modules.van_westendorp import (
+    CALIBRACAO_PADRAO,
+    TEMPLATE_EXEMPLO,
+    calcular_van_westendorp,
+    carregar_pesquisa_preco,
+    template_csv_bytes,
+)
 
 
 def sanitizar_html(texto: str) -> str:
@@ -1681,6 +1688,269 @@ def render_tab_contexto_mercado(resultados: dict) -> None:
     )
 
 
+def _linha_referencia_preco(fig: go.Figure, valor: float | None, rotulo: str, cor: str) -> None:
+    if not valor or valor <= 0:
+        return
+    fig.add_vline(x=valor, line_width=2, line_dash="dot", line_color=cor)
+    fig.add_annotation(
+        x=valor,
+        y=1.02,
+        yref="paper",
+        text=rotulo,
+        showarrow=False,
+        font=dict(color=cor, size=11),
+        bgcolor="#FFFFFF",
+        bordercolor=cor,
+        borderwidth=1,
+    )
+
+
+def _formatar_preco_ideal(valor: float | None) -> str:
+    if valor is None:
+        return "N/D"
+    return formatar_moeda(valor)
+
+
+def render_tab_preco_ideal(resultados: dict) -> None:
+    st.markdown(
+        "<p style='color:#6B7280;'>Suba sua pesquisa de preco e simule a faixa aceitavel, o preco otimo classico e o ponto de maior receita pela extensao Newton-Miller-Smith.</p>",
+        unsafe_allow_html=True,
+    )
+
+    col_intro_a, col_intro_b = st.columns([1.25, 1.0])
+    with col_intro_a:
+        st.markdown(
+            """
+            <div class="context-shell">
+              <div class="context-kicker">Preco ideal</div>
+              <div class="context-title">Emulador Van Westendorp</div>
+              <div class="context-body">
+                Use as colunas <strong>too_cheap</strong>, <strong>cheap</strong>, <strong>expensive</strong>,
+                <strong>too_expensive</strong>, <strong>pi_cheap</strong>, <strong>pi_expensive</strong> e
+                <strong>include</strong>. As notas de intencao seguem a calibracao 1-5 da planilha original.
+              </div>
+            </div>
+            """,
+            unsafe_allow_html=True,
+        )
+    with col_intro_b:
+        st.download_button(
+            "Baixar template CSV do emulador",
+            data=template_csv_bytes(),
+            file_name="template_preco_ideal_launchscore.csv",
+            mime="text/csv",
+            use_container_width=True,
+        )
+
+    upload = st.file_uploader(
+        "Pesquisa de preco (CSV ou XLSX)",
+        type=["csv", "xlsx"],
+        key="vw_upload",
+        help="Se preferir, use a tabela logo abaixo para colar algumas respostas manualmente.",
+    )
+
+    fonte_dados = "editor"
+    dados_base = TEMPLATE_EXEMPLO.copy()
+    if upload is not None:
+        try:
+            dados_base = carregar_pesquisa_preco(upload)
+            fonte_dados = "upload"
+            st.success(f"Arquivo carregado: {upload.name}")
+        except Exception as exc:
+            st.error(f"Nao foi possivel ler o arquivo enviado: {exc}")
+            return
+
+    if fonte_dados == "editor":
+        dados_pesquisa = st.data_editor(
+            dados_base,
+            num_rows="dynamic",
+            use_container_width=True,
+            key="vw_editor",
+        )
+    else:
+        st.dataframe(dados_base, use_container_width=True, hide_index=True)
+        dados_pesquisa = dados_base
+
+    valor_referencia = float(resultados["empreendimento"].get("valor_unidade") or 0)
+
+    with st.expander("Ajustes da simulacao", expanded=False):
+        col_cfg1, col_cfg2, col_cfg3 = st.columns(3)
+        with col_cfg1:
+            amplitude_sugerida = max(valor_referencia / 20, 1000) if valor_referencia else 10000
+            price_step = st.number_input(
+                "Passo entre precos simulados (R$)",
+                min_value=1000.0,
+                value=float(round(amplitude_sugerida / 1000) * 1000),
+                step=1000.0,
+                key="vw_price_step",
+            )
+        with col_cfg2:
+            factor_too_cheap = st.number_input(
+                "Fator abaixo do too cheap",
+                min_value=0.0,
+                max_value=1.5,
+                value=1.0,
+                step=0.1,
+                key="vw_factor_too_cheap",
+            )
+        with col_cfg3:
+            factor_too_expensive = st.number_input(
+                "Fator no too expensive",
+                min_value=0.0,
+                max_value=1.5,
+                value=0.0,
+                step=0.1,
+                key="vw_factor_too_expensive",
+            )
+
+        st.caption("Calibracao padrao da intencao de compra usada na planilha original.")
+        cols_cal = st.columns(5)
+        calibracao = {}
+        for idx, nota in enumerate(sorted(CALIBRACAO_PADRAO)):
+            with cols_cal[idx]:
+                calibracao[nota] = st.number_input(
+                    f"Nota {nota}",
+                    min_value=0.0,
+                    max_value=1.0,
+                    value=float(CALIBRACAO_PADRAO[nota]),
+                    step=0.05,
+                    key=f"vw_cal_{nota}",
+                )
+
+    try:
+        simulacao = calcular_van_westendorp(
+            dados_pesquisa,
+            price_step=price_step,
+            calibration=calibracao,
+            factor_too_expensive=factor_too_expensive,
+            factor_too_cheap=factor_too_cheap,
+        )
+    except Exception as exc:
+        st.error(f"Nao foi possivel rodar a simulacao: {exc}")
+        return
+
+    curvas = simulacao["curvas"]
+    resumo = simulacao["resumo"]
+
+    m1, m2, m3, m4 = st.columns(4)
+    m1.metric("Preco otimo classico", _formatar_preco_ideal(resumo["preco_otimo_classico"]))
+    m2.metric("Faixa aceitavel", f"{_formatar_preco_ideal(resumo['faixa_aceitavel_min'])} a {_formatar_preco_ideal(resumo['faixa_aceitavel_max'])}")
+    m3.metric("Pico de receita simulada", _formatar_preco_ideal(resumo["preco_otimo_receita"]))
+    m4.metric("Respostas validas", f"{resumo['n_respostas']}")
+
+    fig_curvas = go.Figure()
+    mapa_curvas = {
+        "Muito barato": ("too_cheap", "#F59E0B"),
+        "Barato": ("cheap", "#10B981"),
+        "Caro": ("expensive", "#2563EB"),
+        "Muito caro": ("too_expensive", "#DC2626"),
+    }
+    for nome, (coluna, cor) in mapa_curvas.items():
+        fig_curvas.add_trace(
+            go.Scatter(
+                x=curvas["price"],
+                y=curvas[coluna],
+                mode="lines",
+                name=nome,
+                line=dict(color=cor, width=3),
+                hovertemplate="Preco: R$ %{x:,.0f}<br>Curva: %{y:.1%}<extra></extra>",
+            )
+        )
+
+    _linha_referencia_preco(fig_curvas, resumo["preco_otimo_classico"], "Preco otimo classico", "#111827")
+    _linha_referencia_preco(fig_curvas, resumo["preco_otimo_receita"], "Pico de receita", "#7C3AED")
+    _linha_referencia_preco(fig_curvas, valor_referencia, "Ticket atual", CORES["dourado"])
+    fig_curvas.update_layout(
+        title="Curvas classicas de sensibilidade a preco",
+        paper_bgcolor=CORES["fundo"],
+        plot_bgcolor=CORES["fundo"],
+        height=420,
+        yaxis_tickformat=".0%",
+        yaxis_title="Respondentes acumulados",
+        xaxis_title="Preco",
+        legend_title_text="Curvas",
+    )
+    st.plotly_chart(fig_curvas, use_container_width=True, key="vw_curvas")
+
+    fig_sim = go.Figure()
+    fig_sim.add_trace(
+        go.Scatter(
+            x=curvas["price"],
+            y=curvas["purchase_intent"],
+            mode="lines",
+            name="Intencao media de compra",
+            line=dict(color="#1B2A4A", width=3),
+            hovertemplate="Preco: R$ %{x:,.0f}<br>Intencao: %{y:.1%}<extra></extra>",
+        )
+    )
+    fig_sim.add_trace(
+        go.Scatter(
+            x=curvas["price"],
+            y=curvas["reach"],
+            mode="lines",
+            name="% na faixa aceitavel",
+            line=dict(color="#E8A020", width=2, dash="dash"),
+            hovertemplate="Preco: R$ %{x:,.0f}<br>Reach: %{y:.1%}<extra></extra>",
+        )
+    )
+    fig_sim.add_trace(
+        go.Bar(
+            x=curvas["price"],
+            y=curvas["revenue_index"],
+            name="Indice de receita",
+            marker_color="rgba(124,58,237,0.22)",
+            yaxis="y2",
+            hovertemplate="Preco: R$ %{x:,.0f}<br>Indice: %{y:,.0f}<extra></extra>",
+        )
+    )
+    _linha_referencia_preco(fig_sim, resumo["preco_otimo_receita"], "Pico de receita", "#7C3AED")
+    _linha_referencia_preco(fig_sim, valor_referencia, "Ticket atual", CORES["dourado"])
+    fig_sim.update_layout(
+        title="Emulador de intencao, reach e receita",
+        paper_bgcolor=CORES["fundo"],
+        plot_bgcolor=CORES["fundo"],
+        height=430,
+        xaxis_title="Preco",
+        yaxis=dict(title="Intencao / Reach", tickformat=".0%"),
+        yaxis2=dict(title="Indice de receita", overlaying="y", side="right", showgrid=False),
+        barmode="overlay",
+        legend_title_text="Simulacao",
+    )
+    st.plotly_chart(fig_sim, use_container_width=True, key="vw_sim")
+
+    col_sel_a, col_sel_b = st.columns([1.0, 1.6])
+    with col_sel_a:
+        preco_escolhido = st.number_input(
+            "Emular um preco especifico (R$)",
+            min_value=float(curvas["price"].min()),
+            max_value=float(curvas["price"].max()),
+            value=float(resumo["preco_otimo_receita"]),
+            step=float(simulacao["price_step"]),
+            key="vw_preco_escolhido",
+        )
+        linha = curvas.iloc[(curvas["price"] - preco_escolhido).abs().argsort()[:1]].iloc[0]
+        st.metric("Intencao media", f"{linha['purchase_intent']:.1%}")
+        st.metric("Reach aceitavel", f"{linha['reach']:.1%}")
+        st.metric("Indice de receita", f"{linha['revenue_index']:,.0f}")
+    with col_sel_b:
+        resumo_df = pd.DataFrame(
+            [
+                {"Indicador": "Ponto de marginal cheapness (PMC)", "Valor": _formatar_preco_ideal(resumo["faixa_aceitavel_min"])},
+                {"Indicador": "Optimal Price Point (OPP)", "Valor": _formatar_preco_ideal(resumo["preco_otimo_classico"])},
+                {"Indicador": "Indifference Price Point (IDP)", "Valor": _formatar_preco_ideal(resumo["preco_indiferenca"])},
+                {"Indicador": "Point of marginal expensiveness (PME)", "Valor": _formatar_preco_ideal(resumo["faixa_aceitavel_max"])},
+                {"Indicador": "Preco de maior receita simulada", "Valor": _formatar_preco_ideal(resumo["preco_otimo_receita"])},
+                {"Indicador": "Preco de maior intencao", "Valor": _formatar_preco_ideal(resumo["preco_maior_intencao"])},
+            ]
+        )
+        st.dataframe(resumo_df, use_container_width=True, hide_index=True)
+
+    st.caption(
+        "Leitura rapida: OPP resume a leitura classica do Van Westendorp, enquanto o pico de receita usa a extensao "
+        "Newton-Miller-Smith para ponderar intencao de compra ao longo da curva de preco."
+    )
+
+
 def render_tab_ibge(resultados: dict) -> None:
     st.markdown("### Fontes de Dados Utilizadas")
     df_fontes = pd.DataFrame(FONTES_DE_DADOS)
@@ -1693,7 +1963,7 @@ def render_tab_ibge(resultados: dict) -> None:
 
 def render_dashboard(resultados: dict) -> None:
     render_kpis(resultados)
-    tab1, tab2, tab3, tab4, tab5, tab6 = st.tabs(
+    tab1, tab2, tab3, tab4, tab5, tab6, tab7 = st.tabs(
         [
             "📊 Score Detalhado",
             "💰 Projecao de Cenarios",
@@ -1712,8 +1982,10 @@ def render_dashboard(resultados: dict) -> None:
     with tab4:
         render_tab_publico(resultados)
     with tab5:
-        render_tab_contexto_mercado(resultados)
+        render_tab_preco_ideal(resultados)
     with tab6:
+        render_tab_contexto_mercado(resultados)
+    with tab7:
         render_tab_ibge(resultados)
 
     st.subheader("Exportar Apresentacao")
@@ -1794,13 +2066,19 @@ def render_dashboard_story(resultados: dict) -> None:
     render_tab_publico(resultados)
 
     secao_resultado(
-        "6. Contexto de mercado",
+        "6. Preco ideal",
+        "Se voce tiver pesquisa de disposicao a pagar, esta etapa transforma as respostas em faixa aceitavel, preco classico e pico de receita simulada.",
+    )
+    render_tab_preco_ideal(resultados)
+
+    secao_resultado(
+        "7. Contexto de mercado",
         "Antes da decisao final, vale ler o pano de fundo macro, local e de demanda digital que pode acelerar ou frear o lancamento.",
     )
     render_tab_contexto_mercado(resultados)
 
     secao_resultado(
-        "7. Evidencias que sustentam a analise",
+        "8. Evidencias que sustentam a analise",
         "Aqui ficam os indicadores publicos utilizados, a comparacao com referencias nacionais e a confiabilidade dos dados.",
     )
     render_tab_ibge(resultados)
