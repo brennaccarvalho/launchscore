@@ -269,8 +269,6 @@ def render_header_executive() -> None:
       </p>
     </div>
     <div style="min-width:220px; text-align:right;">
-      <div style="font-size:0.78rem; color:#E8A020; font-weight:700; text-transform:uppercase; letter-spacing:0.08em;">Autoria</div>
-      <div style="font-size:1rem; color:#FFFFFF; font-weight:700; margin-top:4px;">Brenna Carvalho</div>
       <div style="font-size:0.84rem; color:#C7D2E2; margin-top:4px;">Metodologia proprietaria LaunchScore</div>
     </div>
   </div>
@@ -509,7 +507,7 @@ def render_bloco_interesse_busca(dados_trends: dict) -> None:
                 height=320,
                 margin=dict(l=10, r=10, t=48, b=10),
                 xaxis_title="",
-                yaxis_title="Indice",
+                yaxis_title="?ndice",
             )
             st.plotly_chart(fig, use_container_width=True, key="trends_mix")
         else:
@@ -732,7 +730,7 @@ def render_sidebar() -> None:
         st.markdown("### Glossario")
         glossario = {
             "VGV": "Valor Geral de Vendas - total de receita potencial do empreendimento",
-            "Score": "Indice de dificuldade estimada de venda (0 = facil, 100 = critico)",
+            "Score": "?ndice de dificuldade estimada de venda (0 = facil, 100 = critico)",
             "CPL": "Custo por Lead - quanto custa gerar um contato qualificado",
             "ROAS": "Retorno sobre o investimento em midia",
             "Mix de Midia": "Distribuicao estrategica do budget entre canais de comunicacao",
@@ -1504,9 +1502,9 @@ def render_tab_contexto_mercado(resultados: dict) -> None:
 
     _bloco_contexto(
         "Leitura Executiva",
-        "Preco, liquidez, credito e demanda foram organizados para responder se o mercado ajuda a absorcao agora.",
+        "Pre?o, liquidez, cr?dito e demanda foram organizados para responder se o mercado ajuda a absorcao agora.",
         (
-            "Os blocos abaixo seguem uma ordem de leitura mais util: primeiro os sinais locais de preco e transacao, "
+            "Os blocos abaixo seguem uma ordem de leitura mais ?til: primeiro os sinais locais de pre?o e transa??o, "
             "depois o pano de fundo de credito e custos, e por fim a demanda digital que pode acelerar ou frear a abertura."
         ),
         _metadata_tags_html(
@@ -1515,14 +1513,14 @@ def render_tab_contexto_mercado(resultados: dict) -> None:
         ),
     )
 
-    st.markdown("### Bloco A — Precos e Mercado Local")
+    st.markdown("### PREÇOS E MERCADO LOCAL")
     col_a1, col_a2 = st.columns(2)
     with col_a1:
         if dados_fipezap.get("disponivel"):
             _card_insight("FipeZap", f"R$ {dados_fipezap['preco_medio_m2']:,.0f}/m²", _texto_fipezap(dados_fipezap))
             fx1, fx2 = st.columns(2)
-            fx1.metric("Variacao mensal", f"{dados_fipezap['variacao_mensal']:+.2f}%")
-            fx2.metric("Variacao 12m", f"{dados_fipezap['variacao_12m']:+.1f}%")
+            fx1.metric("Variação mensal", f"{dados_fipezap['variacao_mensal']:+.2f}%")
+            fx2.metric("Variação 12m", f"{dados_fipezap['variacao_12m']:+.1f}%")
             st.markdown(
                 _metadata_tags_html(
                     dados_fipezap.get("fonte"),
@@ -1531,13 +1529,13 @@ def render_tab_contexto_mercado(resultados: dict) -> None:
                 unsafe_allow_html=True,
             )
         else:
-            _card_insight("FipeZap", "Nao disponivel", dados_fipezap.get("motivo", "Cidade sem cobertura."), destaque="#D6C5A0")
+            _card_insight("FipeZap", "Não disponível", "Não disponível na sua área ou não foi possível carregar.", destaque="#D6C5A0")
     with col_a2:
         if dados_rib.get("disponivel"):
             _card_insight("RIB / Registros", f"{dados_rib['compra_venda_mensal']:,.0f}/mes", _texto_rib(dados_rib), destaque="#1B2A4A")
             rb1, rb2 = st.columns(2)
             rb1.metric("Variacao a/a", f"{dados_rib['variacao_anual_pct']:+.1f}%")
-            rb2.metric("Media 12m", f"{dados_rib['media_mensal_12m']:,.0f}")
+            rb2.metric("Média 12m", f"{dados_rib['media_mensal_12m']:,.0f}")
             st.markdown(
                 _metadata_tags_html(
                     dados_rib.get("fonte"),
@@ -1546,16 +1544,16 @@ def render_tab_contexto_mercado(resultados: dict) -> None:
                 unsafe_allow_html=True,
             )
         else:
-            _card_insight("RIB / Registros", "Nao disponivel", dados_rib.get("motivo", "Municipio sem base local."), destaque="#D6C5A0")
+            _card_insight("RIB / Registros", "Não disponível", "Não disponível na sua área ou não foi possível carregar.", destaque="#D6C5A0")
 
-    st.markdown("### Bloco B — Credito e Macro")
+    st.markdown("### CRÉDITO E MACRO")
     render_contexto_macro_kpis(resultados)
     cols_macro = st.columns(4)
     cards_macro = [
-        ("Ticket medio financiado", formatar_valor_contexto(dados_bcb.get("ticket_medio_financiado", {}).get("valor"), "moeda"), "Benchmark nacional de financiamento por unidade.", "#E8A020"),
-        ("IPCA 12m", formatar_valor_contexto(dados_bcb.get("ipca_12m", {}).get("valor"), "pct"), "Inflacao alta corrige renda mais devagar que o custo de vida.", "#1B2A4A"),
+        ("Ticket médio financiado", formatar_valor_contexto(dados_bcb.get("ticket_medio_financiado", {}).get("valor"), "moeda"), "Benchmark nacional de financiamento por unidade.", "#E8A020"),
+        ("IPCA 12m", formatar_valor_contexto(dados_bcb.get("ipca_12m", {}).get("valor"), "pct"), "Inflação alta corrige renda mais devagar que o custo de vida.", "#1B2A4A"),
         ("INCC-DI", formatar_valor_contexto(dados_bcb.get("incc", {}).get("valor"), "pct"), _texto_impacto_bcb("incc", dados_bcb.get("incc", {}).get("valor")), "#C46A3A"),
-        ("IGP-M 12m", formatar_valor_contexto(dados_bcb.get("igpm_12m", {}).get("valor"), "pct"), "Ajuda a ler pressao sobre aluguel e contratos imobiliarios.", "#D6C5A0"),
+        ("IGP-M 12m", formatar_valor_contexto(dados_bcb.get("igpm_12m", {}).get("valor"), "pct"), "Ajuda a ler pressão sobre aluguel e contratos imobiliários.", "#D6C5A0"),
     ]
     for coluna, (titulo, valor, detalhe, cor) in zip(cols_macro, cards_macro):
         with coluna:
@@ -1563,7 +1561,7 @@ def render_tab_contexto_mercado(resultados: dict) -> None:
 
     col_b1, col_b2 = st.columns([1.2, 1.05])
     with col_b1:
-        _card_insight("Pressao de custos", f"{pressao['pressao_incorporador']:+.1f} pts", _texto_pressao_custos(pressao), destaque="#C46A3A")
+        _card_insight("Pressão de custos", f"{pressao['pressao_incorporador']:+.1f} pts", _texto_pressao_custos(pressao), destaque="#C46A3A")
         st.markdown(
             _metadata_tags_html("BCB/SGS", f"INCC {pressao['incc']:.1f}%", f"IPCA {pressao['ipca']:.1f}%", f"IGP-M {pressao['igpm']:.1f}%"),
             unsafe_allow_html=True,
@@ -1573,12 +1571,12 @@ def render_tab_contexto_mercado(resultados: dict) -> None:
             _card_insight(
                 f"Benchmark estadual {benchmark_uf.get('uf', '')}",
                 formatar_valor_contexto(benchmark_uf.get("valor_financiado"), "moeda"),
-                "Referencia estadual de credito usada como pano de fundo do mercado regional.",
+                "Referência estadual de crédito usada como pano de fundo do mercado regional.",
                 destaque="#1B2A4A",
             )
             uf1, uf2 = st.columns(2)
             uf1.metric("Unidades", formatar_valor_contexto(benchmark_uf.get("unidades_financiadas"), "numero"))
-            uf2.metric("LTV medio", formatar_valor_contexto(benchmark_uf.get("ltv_medio"), "pct"))
+            uf2.metric("LTV médio", formatar_valor_contexto(benchmark_uf.get("ltv_medio"), "pct"))
             st.markdown(
                 _metadata_tags_html(
                     benchmark_uf.get("fonte"),
@@ -1587,9 +1585,9 @@ def render_tab_contexto_mercado(resultados: dict) -> None:
                 unsafe_allow_html=True,
             )
         else:
-            _card_insight("Benchmark estadual", "Nao disponivel", benchmark_uf.get("motivo", "UF sem benchmark carregado."), destaque="#D6C5A0")
+            _card_insight("Benchmark estadual", "Não disponível", "Não disponível na sua área ou não foi possível carregar.", destaque="#D6C5A0")
 
-    st.markdown("### Bloco C — Demanda Digital")
+    st.markdown("### DEMANDA DIGITAL")
     col_c1, col_c2 = st.columns([1.35, 1.0])
     with col_c1:
         serie = dados_trends.get("serie_interesse", [])
@@ -1626,16 +1624,16 @@ def render_tab_contexto_mercado(resultados: dict) -> None:
                 height=320,
                 margin=dict(l=10, r=10, t=48, b=10),
                 xaxis_title="",
-                yaxis_title="Indice",
+                yaxis_title="Índice",
             )
             st.plotly_chart(fig, use_container_width=True, key="contexto_trends")
         else:
-            st.info("Google Trends indisponivel no momento. O app usa fallback neutro quando a integracao nao responde.")
+            st.info("Não disponível na sua área ou não foi possível carregar.")
     with col_c2:
         _card_insight(
             "Google Trends",
             f"{dados_trends.get('score_interesse', 50)}/100",
-            f"Tendencia recente: {dados_trends.get('tendencia_recente', 'indisponivel')}. Use esta leitura para dosar urgencia criativa e pressao comercial.",
+            f"Tendência recente: {dados_trends.get('tendencia_recente', 'indisponivel')}. Use esta leitura para dosar urgência criativa e pressão comercial.",
             destaque="#1B2A4A",
         )
         st.markdown(
@@ -1646,7 +1644,7 @@ def render_tab_contexto_mercado(resultados: dict) -> None:
             unsafe_allow_html=True,
         )
 
-    st.markdown("### Indice de Favorabilidade do Mercado")
+    st.markdown("### ÍNDICE DE FAVORABILIDADE DO MERCADO")
     col_f1, col_f2 = st.columns([0.9, 2.1])
     col_f1.metric("Favorabilidade", f"{favorabilidade['score']}/10")
     col_f2.markdown(
@@ -1674,62 +1672,9 @@ def render_tab_ibge(resultados: dict) -> None:
     col_f3.metric("Dependem de chave/conta", f"{(pd.DataFrame(FONTES_DE_DADOS)['requer_key']).sum()}")
     st.dataframe(df_fontes, use_container_width=True, hide_index=True)
 
-    st.markdown("### Dados Municipais e Normalizacao")
-    linhas = []
-    for chave, dados in resultados["dados_ibge"].items():
-        if chave == "codigo_ibge":
-            continue
-        mediana = dados.get("mediana_nacional")
-        valor = dados.get("valor")
-        comparacao = "-"
-        if isinstance(valor, (int, float)) and isinstance(mediana, (int, float)):
-            comparacao = "▲ acima da media" if valor >= mediana else "▼ abaixo da media"
-        chave_norm = {
-            "renda_media_domiciliar": "renda_media",
-            "faixa_etaria_predominante": "faixa_etaria",
-            "densidade_populacional": "densidade",
-            "proporcao_alugados": "proporcao_alugados",
-            "crescimento_populacional": "crescimento_pop",
-            "escolaridade": "escolaridade",
-            "idh": "idh",
-        }.get(chave, chave)
-        linhas.append(
-            {
-                "Variavel": chave,
-                "Valor para o Municipio": valor,
-                "Mediana Nacional": mediana,
-                "Comparacao": comparacao,
-                "Valor Normalizado (0-10)": resultados["dados_normalizados"].get(chave_norm),
-                "Fonte": dados.get("fonte_detalhe"),
-                "Confiabilidade": "REAL" if dados.get("fonte") == "api" else "ESTIMATIVA",
-            }
-        )
-    df_ibge = pd.DataFrame(linhas)
-    reais = (df_ibge["Confiabilidade"] == "REAL").sum()
-    estimativas = (df_ibge["Confiabilidade"] == "ESTIMATIVA").sum()
-    col1, col2, col3 = st.columns(3)
-    col1.metric("Indicadores utilizados", f"{len(df_ibge)}")
-    col2.metric("Dados reais", f"{reais}")
-    col3.metric("Estimativas", f"{estimativas}")
-    st.dataframe(df_ibge, use_container_width=True, hide_index=True)
 
-    df_heat = montar_breakdown_df(resultados["resultado_score"])[["Variavel", "Contribuicao"]]
-    fig_heat = px.bar(
-        df_heat.sort_values("Contribuicao", ascending=False),
-        x="Contribuicao",
-        y="Variavel",
-        orientation="h",
-        color="Contribuicao",
-        color_continuous_scale=["#FAF8F5", "#E8A020", "#1B2A4A"],
-        title="Variaveis com maior peso no score",
-    )
-    fig_heat.update_layout(
-        paper_bgcolor=CORES["fundo"],
-        plot_bgcolor=CORES["fundo"],
-        height=320,
-        coloraxis_showscale=False,
-    )
-    st.plotly_chart(fig_heat, use_container_width=True, key="ibge_peso_score")
+
+
 
 
 def render_dashboard(resultados: dict) -> None:
@@ -1883,25 +1828,6 @@ def main() -> None:
     etapa_ativa = st.session_state["etapa_ativa"]
     render_step_nav(etapa_ativa)
 
-    # Botoes de navegacao entre etapas
-    _etapas_keys = [e[0] for e in _ETAPAS_NAV]
-    _idx_ativo = _etapas_keys.index(etapa_ativa) if etapa_ativa in _etapas_keys else 0
-    _nav_cols = st.columns(3, gap="small")
-    for _i, ((chave, num, label), col) in enumerate(zip(_ETAPAS_NAV, _nav_cols)):
-        _is_active = chave == etapa_ativa
-        _is_done = _i < _idx_ativo
-        _rotulo = f"✓ {label}" if _is_done else label
-        with col:
-            if st.button(
-                _rotulo,
-                key=f"_nav_btn_{num}",
-                use_container_width=True,
-                type="primary" if _is_active else "secondary",
-                disabled=_is_active,
-            ):
-                st.session_state["etapa_ativa"] = chave
-                st.rerun()
-
     if etapa_ativa == "1. Dados do Empreendimento":
         st.markdown(
             """
@@ -1925,27 +1851,25 @@ def main() -> None:
 
         # ── Coluna esquerda: dados do empreendimento ──
         with col_left:
-            with st.container():
-                st.markdown('<div class="bloco-form">', unsafe_allow_html=True)
-
-                st.markdown('<div class="form-section-title">Identificacao</div>', unsafe_allow_html=True)
+            with st.container(border=True):
+                st.markdown("### Identificação")
                 nome_empreendimento = st.text_input(
                     "Nome do empreendimento",
                     placeholder="Ex: Vista Mar Residence",
                 )
                 tipologia = st.selectbox("Tipologia do produto", ["Lotes", "Apartamentos"])
 
-                st.markdown('<div class="form-section-title">Localizacao</div>', unsafe_allow_html=True)
+                st.markdown("### Localização")
                 cep = st.text_input(
                     "CEP",
                     placeholder="00000-000",
                     max_chars=9,
-                    help="Informe o CEP do terreno para geocodificacao automatica.",
+                    help="Informe o CEP do terreno para geocodificação automática.",
                 )
                 cidade_manual = st.text_input(
                     "Ou informe a cidade",
                     placeholder="Ex: Fortaleza - CE",
-                    help="Usado como alternativa se o CEP nao for reconhecido.",
+                    help="Usado como alternativa se o CEP não for reconhecido.",
                 )
 
                 sugestao = obter_sugestao_localizacao(cep, cidade_manual)
@@ -1958,22 +1882,22 @@ def main() -> None:
                     detalhe_str = " ".join(detalhes)
                     st.markdown(
                         f"""<div class="suggestion-card">
-                          📌 <strong>Sugestao de localizacao:</strong> {sugestao['score_sugerido']}/5 — {sugestao['resumo']}
+                          <strong>Sugestão de localização:</strong> {sugestao['score_sugerido']}/5 - {sugestao['resumo']}
                           {(' ' + detalhe_str) if detalhe_str else ''}
                         </div>""",
                         unsafe_allow_html=True,
                     )
 
-                st.markdown('<div class="form-section-title">Produto e Volume</div>', unsafe_allow_html=True)
+                st.markdown("### Produto e Volume")
                 valor_unidade = st.number_input(
                     "Valor por unidade (R$)",
                     min_value=50_000,
                     step=10_000,
                     value=650_000,
-                    help="Valor medio de venda de cada unidade.",
+                    help="Valor médio de venda de cada unidade.",
                 )
                 volume_unidades = st.number_input(
-                    "Numero de unidades",
+                    "Número de unidades",
                     min_value=1,
                     max_value=5_000,
                     step=1,
@@ -1981,24 +1905,16 @@ def main() -> None:
                     help="Quantidade total de unidades a comercializar.",
                 )
 
-                st.markdown("</div>", unsafe_allow_html=True)
-
-        # ── Coluna direita: atributos (grid 2×3) ──
         with col_right:
-            with st.container():
-                st.markdown('<div class="bloco-form">', unsafe_allow_html=True)
-                st.markdown('<div class="form-section-title">Atributos do Produto</div>', unsafe_allow_html=True)
-                st.markdown(
-                    '<p class="input-hint">Avalie cada atributo de 1 (pior) a 5 (melhor). '
-                    'Atributos positivos reduzem o score de dificuldade.</p>',
-                    unsafe_allow_html=True,
-                )
+            with st.container(border=True):
+                st.markdown("### Atributos do Produto")
+                st.caption("Avalie cada atributo de 1 (pior) a 5 (melhor). Atributos positivos reduzem o score de dificuldade.")
 
                 r1_col1, r1_col2 = st.columns(2)
                 with r1_col1:
                     concorrencia = nivel_selector(
-                        "Concorrencia",
-                        "Empreendimentos similares em comercializacao no mesmo raio",
+                        "Concorrência",
+                        "Empreendimentos similares em comercialização no mesmo raio",
                         "Saturado",
                         "Livre",
                         "concorrencia",
@@ -2006,8 +1922,8 @@ def main() -> None:
                 with r1_col2:
                     localizacao_default = sugestao["score_sugerido"] if sugestao else 3
                     localizacao = nivel_selector(
-                        "Localizacao",
-                        "Acessibilidade, infraestrutura e percepcao de valor do terreno",
+                        "Localização",
+                        "Acessibilidade, infraestrutura e percepção de valor do terreno",
                         "Fraca",
                         "Premium",
                         "localizacao",
@@ -2017,16 +1933,16 @@ def main() -> None:
                 r2_col1, r2_col2 = st.columns(2)
                 with r2_col1:
                     inovacao = nivel_selector(
-                        "Inovacao",
-                        "Diferenciacao em conceito, arquitetura ou proposta de valor",
-                        "Padrao",
+                        "Inovação",
+                        "Diferenciação em conceito, arquitetura ou proposta de valor",
+                        "Padrão",
                         "Inovador",
                         "inovacao",
                     )
                 with r2_col2:
                     tracao = nivel_selector(
-                        "Tracao",
-                        "Vendas, fila de espera ou interesse comprovado antes do lancamento",
+                        "Tração",
+                        "Vendas, fila de espera ou interesse comprovado antes do lançamento",
                         "Nenhuma",
                         "Forte",
                         "tracao",
@@ -2037,7 +1953,7 @@ def main() -> None:
                     funcionalidades = nivel_selector(
                         "Funcionalidades",
                         "Lazer, tecnologia, sustentabilidade e acabamento",
-                        "Basico",
+                        "Básico",
                         "Completo",
                         "funcionalidades",
                     )
@@ -2050,15 +1966,8 @@ def main() -> None:
                         "conexao_luxo",
                     )
 
-                st.markdown(
-                    '<div class="cta-area">'
-                    '<div class="cta-hint">Ao calcular voce concorda com os '
-                    '<a href="?view=termos" target="_blank">Termos de Uso</a>.</div>',
-                    unsafe_allow_html=True,
-                )
-                calcular = st.button("Calcular Score e Gerar Relatorio", type="primary", use_container_width=True)
-                st.markdown("</div>", unsafe_allow_html=True)  # cta-area
-                st.markdown("</div>", unsafe_allow_html=True)  # bloco-form
+                st.caption("Ao calcular, você concorda com os Termos de Uso.")
+                calcular = st.button("Calcular Score e Gerar Relatório", type="primary", use_container_width=True)
 
         feedback_slot = col_right.empty()
 
