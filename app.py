@@ -354,7 +354,7 @@ def nivel_selector(
         unsafe_allow_html=True,
     )
     valor = st.radio(
-        "",
+        f"{label} (nivel de 1 a 5)",
         options=["1", "2", "3", "4", "5"],
         index=default - 1,
         horizontal=True,
