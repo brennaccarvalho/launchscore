@@ -78,17 +78,21 @@ def injetar_css() -> None:
   }
   .stSlider > div > div > div > div { background: #E8A020 !important; }
   .stSlider > div > div > div { background: #E5DDD0 !important; }
-  .stTabs [data-baseweb="tab-list"] { border-bottom: 2px solid #E5DDD0; gap: 8px; }
+  .stTabs [data-baseweb="tab-list"] {
+    border-bottom: 1px solid #E5DDD0; gap: 10px; padding-bottom: 6px; margin-bottom: 8px;
+  }
   .stTabs [data-baseweb="tab"] {
-    background: transparent; border-radius: 6px 6px 0 0; color: #6B7280;
-    font-weight: 600; padding: 8px 20px;
+    background: #F5F1EA; border: 1px solid #E5DDD0; border-radius: 999px; color: #6B7280;
+    font-weight: 700; padding: 8px 18px;
   }
   .stTabs [aria-selected="true"] {
-    background: #1B2A4A !important; color: #FFFFFF !important; border-bottom: 3px solid #E8A020;
+    background: #1B2A4A !important; color: #FFFFFF !important; border: 1px solid #1B2A4A !important;
+    box-shadow: 0 8px 18px rgba(27,42,74,0.12);
   }
   [data-testid="metric-container"] {
-    background: #FFFFFF; border: 1px solid #E5DDD0; border-top: 3px solid #E8A020;
-    border-radius: 10px; padding: 16px; box-shadow: 0 2px 8px rgba(27,42,74,0.06);
+    background: linear-gradient(180deg, #FFFFFF 0%, #FCFBF8 100%);
+    border: 1px solid #E5DDD0; border-top: 3px solid #E8A020;
+    border-radius: 14px; padding: 16px; box-shadow: 0 10px 24px rgba(27,42,74,0.06);
   }
   [data-testid="metric-container"] label {
     color: #6B7280; font-size: 0.8rem; font-weight: 600; text-transform: uppercase; letter-spacing: 0.05em;
@@ -115,7 +119,7 @@ def injetar_css() -> None:
   }
   .context-shell {
     background:#FFFFFF; border:1px solid #E5DDD0; border-radius:14px; padding:20px;
-    box-shadow:0 8px 24px rgba(27,42,74,0.05); margin-bottom:18px;
+    box-shadow:0 12px 28px rgba(27,42,74,0.06); margin-bottom:18px;
   }
   .context-kicker {
     font-size:0.75rem; text-transform:uppercase; letter-spacing:0.12em; color:#E8A020; font-weight:700;
@@ -332,10 +336,10 @@ def render_step_nav(etapa_ativa: str) -> None:
     for idx, ((chave, num, label), col) in enumerate(zip(_ETAPAS_NAV, cols)):
         is_active = chave == etapa_ativa
         is_done = idx < idx_ativo
-        prefixo = "OK " if is_done else f"{num} "
+        texto = f"✓ {label}" if is_done else label
         with col:
             if st.button(
-                f"{prefixo}{label}",
+                texto,
                 key=f"step_nav_{num}",
                 use_container_width=True,
                 type="primary" if is_active else "secondary",
@@ -416,10 +420,11 @@ def slider_com_descricao(
 def card(titulo: str, conteudo_html: str, cor_borda: str = "#E5DDD0", icone: str = "") -> None:
     st.markdown(
         f"""
-    <div style="background:#FFFFFF; border:1px solid {cor_borda}; border-top:3px solid {cor_borda};
-                border-radius:10px; padding:20px; margin-bottom:16px;
-                box-shadow:0 2px 8px rgba(27,42,74,0.06);">
-      <h3 style="margin-top:0; color:#1B2A4A;">{icone} {titulo}</h3>
+    <div style="background:linear-gradient(180deg,#FFFFFF 0%,#FCFBF8 100%);
+                border:1px solid #E5DDD0; border-left:4px solid {cor_borda};
+                border-radius:14px; padding:20px; margin-bottom:16px;
+                box-shadow:0 10px 24px rgba(27,42,74,0.05);">
+      <h3 style="margin-top:0; margin-bottom:12px; color:#1B2A4A; font-size:1.02rem; font-weight:800;">{icone} {titulo}</h3>
       {conteudo_html}
     </div>
         """,
@@ -1050,8 +1055,9 @@ def _bloco_contexto(titulo: str, takeaway: str, descricao: str = "", tags: str =
 def _card_insight(titulo: str, valor: str, detalhe: str, destaque: str = "#E8A020") -> None:
     st.markdown(
         f"""
-        <div style="background:#FFFFFF;border:1px solid #E5DDD0;border-top:3px solid {destaque};
-                    border-radius:12px;padding:18px;min-height:148px;box-shadow:0 4px 14px rgba(27,42,74,0.05);">
+        <div style="background:linear-gradient(180deg,#FFFFFF 0%,#FCFBF8 100%);
+                    border:1px solid #E5DDD0;border-left:4px solid {destaque};
+                    border-radius:14px;padding:18px;min-height:148px;box-shadow:0 10px 24px rgba(27,42,74,0.05);">
           <div style="font-size:0.78rem;text-transform:uppercase;letter-spacing:0.08em;color:#6B7280;font-weight:700;">{titulo}</div>
           <div style="font-size:1.6rem;color:#1B2A4A;font-weight:800;margin:10px 0 8px 0;">{valor}</div>
           <div style="font-size:0.9rem;color:#6B7280;line-height:1.55;">{detalhe}</div>
@@ -1516,10 +1522,10 @@ def render_tab_contexto_mercado(resultados: dict) -> None:
 
     _bloco_contexto(
         "Leitura Executiva",
-        "Pre?o, liquidez, cr?dito e demanda foram organizados para responder se o mercado ajuda a absorcao agora.",
+        "Pre\u00e7o, liquidez, cr\u00e9dito e demanda foram organizados para responder se o mercado ajuda a absor\u00e7\u00e3o agora.",
         (
-            "Os blocos abaixo seguem uma ordem de leitura mais ?til: primeiro os sinais locais de pre?o e transa??o, "
-            "depois o pano de fundo de credito e custos, e por fim a demanda digital que pode acelerar ou frear a abertura."
+            "Os blocos abaixo seguem uma ordem de leitura mais \u00fatil: primeiro os sinais locais de pre\u00e7o e transa\u00e7\u00e3o, "
+            "depois o pano de fundo de cr\u00e9dito e custos, e por fim a demanda digital que pode acelerar ou frear a abertura."
         ),
         _metadata_tags_html(
             f"Fontes ativas: {dados_publicos.get('fontes_ativas', 0)}/7",
@@ -1725,12 +1731,12 @@ def render_dashboard(resultados: dict) -> None:
 def secao_resultado(titulo: str, subtitulo: str | None = None) -> None:
     st.markdown(
         f"""
-        <div style="margin:28px 0 14px 0;">
+        <div style="margin:32px 0 16px 0;">
           <div style="font-size:0.78rem; font-weight:700; letter-spacing:0.10em; text-transform:uppercase; color:#E8A020; margin-bottom:6px;">
             Leitura executiva
           </div>
-          <div style="font-size:1.45rem; font-weight:800; color:#1B2A4A;">{titulo}</div>
-          {f'<div style="font-size:0.95rem; color:#6B7280; margin-top:6px; max-width:920px;">{subtitulo}</div>' if subtitulo else ''}
+          <div style="font-size:1.52rem; font-weight:800; color:#1B2A4A; line-height:1.2;">{titulo}</div>
+          {f'<div style="font-size:0.95rem; color:#6B7280; margin-top:8px; max-width:860px; line-height:1.6;">{subtitulo}</div>' if subtitulo else ''}
         </div>
         """,
         unsafe_allow_html=True,
@@ -1902,7 +1908,7 @@ def main() -> None:
                     detalhe_str = " ".join(detalhes)
                     st.markdown(
                         f"""<div class="suggestion-card">
-                          <strong>Sugest?o de localiza??o:</strong> {sugestao['score_sugerido']}/5 - {sugestao['resumo']}
+                          <strong>Sugest\u00e3o de localiza\u00e7\u00e3o:</strong> {sugestao['score_sugerido']}/5 - {sugestao['resumo']}
                           {(' ' + detalhe_str) if detalhe_str else ''}
                         </div>""",
                         unsafe_allow_html=True,
