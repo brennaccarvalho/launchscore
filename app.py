@@ -166,20 +166,45 @@ def injetar_css() -> None:
     font-size:0.76rem; color:#9CA3AF; margin:-8px 0 12px 0;
   }
 
-  /* ── Slider customizado ── */
-  .slider-wrap {
-    background:#FAFAF9; border:1px solid #F0EDE8; border-radius:10px;
-    padding:12px 14px 4px 14px; margin-bottom:14px;
+  /* ── Seletor de nivel de atributo (card + radio pills) ── */
+  .attr-card {
+    margin-bottom:6px;
   }
-  .slider-label {
-    font-weight:700; color:#1B2A4A; font-size:0.9rem; margin-bottom:2px;
+  .attr-title {
+    font-size:0.88rem; font-weight:700; color:#1B2A4A; margin-bottom:3px;
   }
-  .slider-desc {
-    color:#6B7280; font-size:0.76rem; line-height:1.4; margin-bottom:6px;
+  .attr-desc {
+    font-size:0.74rem; color:#6B7280; line-height:1.4; margin-bottom:4px;
   }
-  .slider-extremos {
+  .attr-extremos {
     display:flex; justify-content:space-between;
-    font-size:0.69rem; color:#9CA3AF; margin-bottom:-14px;
+    font-size:0.68rem; color:#9CA3AF; margin-top:-10px; margin-bottom:14px;
+  }
+
+  /* Pills para st.radio horizontal (atributos de nivel) */
+  div[data-testid="stRadio"] div[role="radiogroup"] {
+    display:flex; gap:5px; flex-wrap:nowrap;
+  }
+  div[data-testid="stRadio"] div[role="radiogroup"] > label {
+    flex:1; min-width:0; background:#F4F1EC; border:1.5px solid #E5DDD0;
+    border-radius:8px; padding:9px 4px; text-align:center; cursor:pointer;
+    margin:0; display:flex; justify-content:center; align-items:center;
+    transition:background 0.12s, border-color 0.12s;
+  }
+  div[data-testid="stRadio"] div[role="radiogroup"] > label:hover {
+    background:#EAE5DC; border-color:#C9B99A;
+  }
+  div[data-testid="stRadio"] div[role="radiogroup"] > label:has(input:checked) {
+    background:#1B2A4A; border-color:#1B2A4A;
+  }
+  div[data-testid="stRadio"] div[role="radiogroup"] > label:has(input:checked) p {
+    color:#E8A020;
+  }
+  div[data-testid="stRadio"] div[role="radiogroup"] > label > div:first-child {
+    display:none;
+  }
+  div[data-testid="stRadio"] div[role="radiogroup"] p {
+    margin:0; font-weight:700; font-size:0.88rem; color:#4B5563;
   }
 
   /* ── Sugestao de localizacao ── */
@@ -201,8 +226,8 @@ def injetar_css() -> None:
   }
   .cta-hint a { color:#E8A020; font-weight:700; text-decoration:none; }
 
-  /* ── Radio oculto — navegacao usa HTML customizado ── */
-  div[data-testid="stRadio"] { display:none !important; }
+  /* ── Navegacao: radio oculto; nav usa botoes reais ── */
+  div[data-testid="stRadio"][data-nav-radio] { display:none !important; }
 </style>
         """,
         unsafe_allow_html=True,
@@ -284,29 +309,63 @@ def badge_html(texto: str, cor: str) -> str:
     return f'<span class="badge-{cor}">{texto}</span>'
 
 
+_ETAPAS_NAV = [
+    ("1. Dados do Empreendimento", "1", "Dados"),
+    ("2. Processamento",           "2", "Processamento"),
+    ("3. Dashboard de Resultados", "3", "Dashboard"),
+]
+
+
 def render_step_nav(etapa_ativa: str) -> None:
-    """Barra de progresso visual com 3 etapas."""
-    etapas = [
-        ("1", "Dados", "Empreendimento e atributos", "1. Dados do Empreendimento"),
-        ("2", "Processamento", "Coleta e calculo", "2. Processamento"),
-        ("3", "Dashboard", "Resultados e relatorio", "3. Dashboard de Resultados"),
-    ]
+    """Indicador visual de etapas + botoes de navegacao clicaveis."""
+    etapas_keys = [e[0] for e in _ETAPAS_NAV]
+    idx_ativo = etapas_keys.index(etapa_ativa) if etapa_ativa in etapas_keys else 0
+
+    # Faixa decorativa acima dos botoes
     itens_html = ""
-    for num, label, sub, chave in etapas:
-        is_active = etapa_ativa == chave
-        etapas_keys = [e[3] for e in etapas]
-        is_done = etapas_keys.index(chave) < etapas_keys.index(etapa_ativa)
+    for chave, num, label in _ETAPAS_NAV:
+        is_active = chave == etapa_ativa
+        is_done = etapas_keys.index(chave) < idx_ativo
         cls = "step-item step-active" if is_active else ("step-item step-done" if is_done else "step-item")
         check = "✓" if is_done else num
-        itens_html += f"""
-        <div class="{cls}">
-          <div class="step-num">{check}</div>
-          <div>
-            <div class="step-label">{label}</div>
-            <div class="step-sub">{sub}</div>
-          </div>
-        </div>"""
+        itens_html += (
+            f'<div class="{cls}">'
+            f'<div class="step-num">{check}</div>'
+            f'<div><div class="step-label">{label}</div></div>'
+            f"</div>"
+        )
     st.markdown(f'<div class="step-nav">{itens_html}</div>', unsafe_allow_html=True)
+
+
+def nivel_selector(
+    label: str,
+    descricao: str,
+    extremo_esq: str,
+    extremo_dir: str,
+    key: str,
+    default: int = 3,
+) -> int:
+    """Seletor de nivel 1-5 renderizado como pills (st.radio estilizado)."""
+    st.markdown(
+        f'<div class="attr-card">'
+        f'<div class="attr-title">{label}</div>'
+        f'<div class="attr-desc">{descricao}</div>'
+        f"</div>",
+        unsafe_allow_html=True,
+    )
+    valor = st.radio(
+        "",
+        options=["1", "2", "3", "4", "5"],
+        index=default - 1,
+        horizontal=True,
+        key=key,
+        label_visibility="collapsed",
+    )
+    st.markdown(
+        f'<div class="attr-extremos"><span>{extremo_esq}</span><span>{extremo_dir}</span></div>',
+        unsafe_allow_html=True,
+    )
+    return int(valor)
 
 
 def slider_com_descricao(
@@ -318,17 +377,8 @@ def slider_com_descricao(
     key: str,
     default: int = 3,
 ) -> int:
-    st.markdown(
-        f"""
-    <div class="slider-wrap">
-      <div class="slider-label">{icone} {label}</div>
-      <div class="slider-desc">{descricao}</div>
-      <div class="slider-extremos"><span>{extremo_esq}</span><span>{extremo_dir}</span></div>
-    </div>
-        """,
-        unsafe_allow_html=True,
-    )
-    return st.slider("", 1, 5, default, key=key, label_visibility="collapsed")
+    """Mantido para compatibilidade; delega para nivel_selector."""
+    return nivel_selector(label, descricao, extremo_esq, extremo_dir, key, default)
 
 
 def card(titulo: str, conteudo_html: str, cor_borda: str = "#E5DDD0", icone: str = "") -> None:
@@ -1820,16 +1870,27 @@ def main() -> None:
     if "etapa_ativa" not in st.session_state:
         st.session_state["etapa_ativa"] = "1. Dados do Empreendimento"
 
-    # Radio oculto via CSS — mantido para compatibilidade de estado
-    etapa_ativa = st.radio(
-        "Navegacao",
-        ["1. Dados do Empreendimento", "2. Processamento", "3. Dashboard de Resultados"],
-        index=["1. Dados do Empreendimento", "2. Processamento", "3. Dashboard de Resultados"].index(st.session_state["etapa_ativa"]),
-        horizontal=True,
-        label_visibility="collapsed",
-    )
-    st.session_state["etapa_ativa"] = etapa_ativa
+    etapa_ativa = st.session_state["etapa_ativa"]
     render_step_nav(etapa_ativa)
+
+    # Botoes de navegacao entre etapas
+    _etapas_keys = [e[0] for e in _ETAPAS_NAV]
+    _idx_ativo = _etapas_keys.index(etapa_ativa) if etapa_ativa in _etapas_keys else 0
+    _nav_cols = st.columns(3, gap="small")
+    for _i, ((chave, num, label), col) in enumerate(zip(_ETAPAS_NAV, _nav_cols)):
+        _is_active = chave == etapa_ativa
+        _is_done = _i < _idx_ativo
+        _rotulo = f"✓ {label}" if _is_done else label
+        with col:
+            if st.button(
+                _rotulo,
+                key=f"_nav_btn_{num}",
+                use_container_width=True,
+                type="primary" if _is_active else "secondary",
+                disabled=_is_active,
+            ):
+                st.session_state["etapa_ativa"] = chave
+                st.rerun()
 
     if etapa_ativa == "1. Dados do Empreendimento":
         st.markdown(
@@ -1857,14 +1918,14 @@ def main() -> None:
             with st.container():
                 st.markdown('<div class="bloco-form">', unsafe_allow_html=True)
 
-                st.markdown('<div class="form-section-title">📋 Identificacao</div>', unsafe_allow_html=True)
+                st.markdown('<div class="form-section-title">Identificacao</div>', unsafe_allow_html=True)
                 nome_empreendimento = st.text_input(
                     "Nome do empreendimento",
                     placeholder="Ex: Vista Mar Residence",
                 )
                 tipologia = st.selectbox("Tipologia do produto", ["Lotes", "Apartamentos"])
 
-                st.markdown('<div class="form-section-title">📍 Localizacao</div>', unsafe_allow_html=True)
+                st.markdown('<div class="form-section-title">Localizacao</div>', unsafe_allow_html=True)
                 cep = st.text_input(
                     "CEP",
                     placeholder="00000-000",
@@ -1893,7 +1954,7 @@ def main() -> None:
                         unsafe_allow_html=True,
                     )
 
-                st.markdown('<div class="form-section-title">💰 Produto e Volume</div>', unsafe_allow_html=True)
+                st.markdown('<div class="form-section-title">Produto e Volume</div>', unsafe_allow_html=True)
                 valor_unidade = st.number_input(
                     "Valor por unidade (R$)",
                     min_value=50_000,
@@ -1916,7 +1977,7 @@ def main() -> None:
         with col_right:
             with st.container():
                 st.markdown('<div class="bloco-form">', unsafe_allow_html=True)
-                st.markdown('<div class="form-section-title">⚡ Atributos do Produto</div>', unsafe_allow_html=True)
+                st.markdown('<div class="form-section-title">Atributos do Produto</div>', unsafe_allow_html=True)
                 st.markdown(
                     '<p class="input-hint">Avalie cada atributo de 1 (pior) a 5 (melhor). '
                     'Atributos positivos reduzem o score de dificuldade.</p>',
@@ -1925,9 +1986,8 @@ def main() -> None:
 
                 r1_col1, r1_col2 = st.columns(2)
                 with r1_col1:
-                    concorrencia = slider_com_descricao(
+                    concorrencia = nivel_selector(
                         "Concorrencia",
-                        "🏁",
                         "Empreendimentos similares em comercializacao no mesmo raio",
                         "Saturado",
                         "Livre",
@@ -1935,9 +1995,8 @@ def main() -> None:
                     )
                 with r1_col2:
                     localizacao_default = sugestao["score_sugerido"] if sugestao else 3
-                    localizacao = slider_com_descricao(
+                    localizacao = nivel_selector(
                         "Localizacao",
-                        "📍",
                         "Acessibilidade, infraestrutura e percepcao de valor do terreno",
                         "Fraca",
                         "Premium",
@@ -1947,18 +2006,16 @@ def main() -> None:
 
                 r2_col1, r2_col2 = st.columns(2)
                 with r2_col1:
-                    inovacao = slider_com_descricao(
+                    inovacao = nivel_selector(
                         "Inovacao",
-                        "💡",
-                        "Diferenciacão em conceito, arquitetura ou proposta de valor",
+                        "Diferenciacao em conceito, arquitetura ou proposta de valor",
                         "Padrao",
                         "Inovador",
                         "inovacao",
                     )
                 with r2_col2:
-                    tracao = slider_com_descricao(
+                    tracao = nivel_selector(
                         "Tracao",
-                        "📈",
                         "Vendas, fila de espera ou interesse comprovado antes do lancamento",
                         "Nenhuma",
                         "Forte",
@@ -1967,21 +2024,19 @@ def main() -> None:
 
                 r3_col1, r3_col2 = st.columns(2)
                 with r3_col1:
-                    funcionalidades = slider_com_descricao(
+                    funcionalidades = nivel_selector(
                         "Funcionalidades",
-                        "⚙️",
-                        "Lazer, tecnologia, sustentabilidade e qualidade de acabamento",
+                        "Lazer, tecnologia, sustentabilidade e acabamento",
                         "Basico",
                         "Completo",
                         "funcionalidades",
                     )
                 with r3_col2:
-                    conexao_luxo = slider_com_descricao(
-                        "Aspiracional",
-                        "💎",
-                        "Alinhamento com posicionamento premium ou aspiracional",
+                    conexao_luxo = nivel_selector(
+                        "Posicionamento",
+                        "Alinhamento com segmento premium ou aspiracional",
                         "Popular",
-                        "Aspiracional",
+                        "Premium",
                         "conexao_luxo",
                     )
 
