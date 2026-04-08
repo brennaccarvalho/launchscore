@@ -7,12 +7,59 @@
 
 from __future__ import annotations
 
-from config import PESOS_SCORE
+from config import FUNCIONALIDADES_IMOBILIARIAS, PESOS_SCORE
 
 
 def _escala_usuario(valor: int, invertido: bool = False) -> float:
     base = ((valor - 1) / 4) * 10
     return round(10 - base, 2) if invertido else round(base, 2)
+
+
+def _normalizar_funcionalidades(funcionalidades: object) -> list[str]:
+    if isinstance(funcionalidades, list):
+        return [str(item).strip() for item in funcionalidades if str(item).strip()]
+    return []
+
+
+def _score_funcionalidades(funcionalidades: object) -> dict:
+    if isinstance(funcionalidades, int):
+        return {
+            "valor_norm": _escala_usuario(funcionalidades, invertido=True),
+            "cobertura": round(max(0.0, min(1.0, (funcionalidades - 1) / 4)), 4),
+            "itens": [],
+            "quantidade": 0,
+            "detalhe_exibicao": f"Leitura legada em escala 1-5: nível {funcionalidades}.",
+        }
+
+    selecionadas = set(_normalizar_funcionalidades(funcionalidades))
+    if not selecionadas:
+        return {
+            "valor_norm": 10.0,
+            "cobertura": 0.0,
+            "itens": [],
+            "quantidade": 0,
+            "detalhe_exibicao": "Nenhuma funcionalidade relevante marcada.",
+        }
+
+    pesos = {item["id"]: float(item["peso"]) for item in FUNCIONALIDADES_IMOBILIARIAS}
+    labels = {item["id"]: item["label"] for item in FUNCIONALIDADES_IMOBILIARIAS}
+    peso_total = sum(pesos.values()) or 1.0
+    peso_selecionado = sum(pesos[item] for item in selecionadas if item in pesos)
+    cobertura = min(1.0, peso_selecionado / peso_total)
+    valor_norm = round((1 - cobertura) * 10, 2)
+    itens_ordenados = [
+        labels[item["id"]]
+        for item in sorted(FUNCIONALIDADES_IMOBILIARIAS, key=lambda registro: registro["peso"], reverse=True)
+        if item["id"] in selecionadas
+    ]
+    resumo = f"{len(itens_ordenados)} itens marcados ({cobertura:.0%} da cesta ponderada)"
+    return {
+        "valor_norm": valor_norm,
+        "cobertura": round(cobertura, 4),
+        "itens": itens_ordenados,
+        "quantidade": len(itens_ordenados),
+        "detalhe_exibicao": resumo,
+    }
 
 
 def classificar_score(score: float) -> tuple[str, str]:
@@ -203,6 +250,7 @@ def calcular_score(
 ) -> dict:
     """Combina dados externos e atributos do produto em score final."""
 
+    leitura_funcionalidades = _score_funcionalidades(atributos_usuario.get("funcionalidades"))
     valores = {
         "idh": dados_normalizados["idh"],
         "renda_media": dados_normalizados["renda_media"],
@@ -215,7 +263,7 @@ def calcular_score(
         "localizacao": _escala_usuario(atributos_usuario["localizacao"]),
         "inovacao": _escala_usuario(atributos_usuario["inovacao"], invertido=True),
         "tracao": _escala_usuario(atributos_usuario["tracao"], invertido=True),
-        "funcionalidades": _escala_usuario(atributos_usuario["funcionalidades"], invertido=True),
+        "funcionalidades": leitura_funcionalidades["valor_norm"],
         "conexao_luxo": _escala_usuario(atributos_usuario["conexao_luxo"], invertido=True),
     }
 
@@ -229,6 +277,11 @@ def calcular_score(
             "valor_norm": round(valores[chave], 2),
             "contribuicao": round(contribuicao, 4),
         }
+        if chave == "funcionalidades":
+            breakdown[chave]["detalhe_exibicao"] = leitura_funcionalidades["detalhe_exibicao"]
+            breakdown[chave]["itens"] = leitura_funcionalidades["itens"]
+            breakdown[chave]["quantidade"] = leitura_funcionalidades["quantidade"]
+            breakdown[chave]["cobertura"] = leitura_funcionalidades["cobertura"]
 
     score_base = round(score_bruto * 10, 1)
     aj_macro = ajuste_macro(score_base, dados_bcb or {})

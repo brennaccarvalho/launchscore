@@ -59,6 +59,25 @@ PESOS_SCORE = {
     "conexao_luxo": 0.05,
 }
 
+FUNCIONALIDADES_IMOBILIARIAS = [
+    {"id": "piscina", "label": "Piscina", "peso": 1.0},
+    {"id": "academia", "label": "Academia", "peso": 0.9},
+    {"id": "area_gourmet", "label": "Espaco gourmet / salao de festas", "peso": 0.8},
+    {"id": "playground", "label": "Playground / brinquedoteca", "peso": 0.7},
+    {"id": "quadra", "label": "Quadra / area esportiva", "peso": 0.7},
+    {"id": "coworking", "label": "Coworking / espaco de trabalho", "peso": 0.7},
+    {"id": "pet_place", "label": "Pet place / pet care", "peso": 0.5},
+    {"id": "seguranca", "label": "Portaria ou seguranca 24h", "peso": 0.9},
+    {"id": "mercado", "label": "Mini mercado / conveniencia no condominio", "peso": 0.6},
+    {"id": "delivery", "label": "Espaco delivery / locker", "peso": 0.5},
+    {"id": "bicicletario", "label": "Bicicletario", "peso": 0.4},
+    {"id": "carregador_ev", "label": "Carregador para veiculo eletrico", "peso": 0.4},
+    {"id": "energia_solar", "label": "Energia solar / eficiencia energetica", "peso": 0.8},
+    {"id": "reuso_agua", "label": "Reuso de agua / solucao sustentavel", "peso": 0.6},
+    {"id": "rooftop", "label": "Rooftop / lazer diferenciado", "peso": 0.7},
+    {"id": "varanda_gourmet", "label": "Varanda gourmet / pacote de acabamento superior", "peso": 0.8},
+]
+
 TABELA_VERBA = {
     "lotes": {
         "score_0_30": {"min": 0.018, "base": 0.022, "max": 0.028},

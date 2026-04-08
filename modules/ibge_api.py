@@ -52,8 +52,22 @@ def _combinar_payload_cep(cep_limpo: str, brasilapi: dict | None, viacep: dict |
     municipio = _texto_limpo(viacep.get("localidade")) or _texto_limpo(brasilapi.get("city"))
     uf = _texto_limpo(viacep.get("uf")) or _texto_limpo(brasilapi.get("state"))
     codigo_ibge = _texto_limpo(viacep.get("ibge")) or _texto_limpo(brasilapi.get("ibge"))
-    bairro = _texto_limpo(viacep.get("bairro")) or _texto_limpo(brasilapi.get("neighborhood"))
-    rua = _texto_limpo(viacep.get("logradouro")) or _texto_limpo(brasilapi.get("street"))
+    bairro_viacep = _texto_limpo(viacep.get("bairro"))
+    bairro_brasilapi = _texto_limpo(brasilapi.get("neighborhood"))
+    rua_viacep = _texto_limpo(viacep.get("logradouro"))
+    rua_brasilapi = _texto_limpo(brasilapi.get("street"))
+
+    bairro = bairro_viacep
+    if not bairro and brasilapi and not viacep:
+        bairro = bairro_brasilapi
+    if bairro_viacep and bairro_brasilapi and bairro_viacep.casefold() != bairro_brasilapi.casefold():
+        bairro = ""
+
+    rua = rua_viacep
+    if not rua and brasilapi and not viacep:
+        rua = rua_brasilapi
+    if rua_viacep and rua_brasilapi and rua_viacep.casefold() != rua_brasilapi.casefold():
+        rua = ""
 
     if not municipio or not uf or not codigo_ibge:
         raise RuntimeError("Nao foi possivel localizar o CEP automaticamente.")

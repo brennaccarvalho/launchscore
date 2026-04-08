@@ -18,7 +18,7 @@ import plotly.graph_objects as go
 import streamlit as st
 import streamlit.components.v1 as components
 
-from config import CORES, CORES_CANAIS, CORES_CENARIOS
+from config import CORES, CORES_CANAIS, CORES_CENARIOS, FUNCIONALIDADES_IMOBILIARIAS
 from modules.audience import gerar_perfil_publico
 from modules.budget_engine import calcular_pressao_custos, calcular_verba, calcular_vgv
 from modules.data_orchestrator import FONTES_DE_DADOS, calcular_favorabilidade_mercado, coletar_todos_dados
@@ -165,13 +165,17 @@ def injetar_css() -> None:
     padding-bottom:6px; border-bottom:1px solid #F0EDE8;
   }
   .form-section-title:first-child { margin-top:0; }
+  .form-block-title {
+    font-size:1.45rem; font-weight:800; color:#1B2A4A; letter-spacing:0.04em;
+    text-transform:uppercase; margin:0 0 16px 0;
+  }
   .input-hint {
     font-size:0.76rem; color:#9CA3AF; margin:-8px 0 12px 0;
   }
 
   /* ── Seletor de nivel de atributo (card + radio pills) ── */
   .attr-card {
-    margin-bottom:6px;
+    margin-bottom:8px;
   }
   .attr-title {
     font-size:0.88rem; font-weight:700; color:#1B2A4A; margin-bottom:3px;
@@ -181,7 +185,10 @@ def injetar_css() -> None:
   }
   .attr-extremos {
     display:flex; justify-content:space-between;
-    font-size:0.68rem; color:#9CA3AF; margin-top:-10px; margin-bottom:14px;
+    font-size:0.68rem; color:#9CA3AF; margin-top:-8px; margin-bottom:22px;
+  }
+  .func-grid-note {
+    font-size:0.76rem; color:#6B7280; line-height:1.45; margin:0 0 12px 0;
   }
 
   /* Pills para st.radio horizontal (atributos de nivel) */
@@ -318,24 +325,29 @@ _ETAPAS_NAV = [
 
 
 def render_step_nav(etapa_ativa: str) -> None:
-    """Indicador visual de etapas + botoes de navegacao clicaveis."""
+    """Navegacao unica entre etapas."""
     etapas_keys = [e[0] for e in _ETAPAS_NAV]
     idx_ativo = etapas_keys.index(etapa_ativa) if etapa_ativa in etapas_keys else 0
-
-    # Faixa decorativa acima dos botoes
-    itens_html = ""
-    for chave, num, label in _ETAPAS_NAV:
+    cols = st.columns(len(_ETAPAS_NAV), gap="small")
+    for idx, ((chave, num, label), col) in enumerate(zip(_ETAPAS_NAV, cols)):
         is_active = chave == etapa_ativa
-        is_done = etapas_keys.index(chave) < idx_ativo
-        cls = "step-item step-active" if is_active else ("step-item step-done" if is_done else "step-item")
-        check = "✓" if is_done else num
-        itens_html += (
-            f'<div class="{cls}">'
-            f'<div class="step-num">{check}</div>'
-            f'<div><div class="step-label">{label}</div></div>'
-            f"</div>"
-        )
-    st.markdown(f'<div class="step-nav">{itens_html}</div>', unsafe_allow_html=True)
+        is_done = idx < idx_ativo
+        prefixo = "OK " if is_done else f"{num} "
+        with col:
+            if st.button(
+                f"{prefixo}{label}",
+                key=f"step_nav_{num}",
+                use_container_width=True,
+                type="primary" if is_active else "secondary",
+                disabled=is_active,
+            ):
+                st.session_state["etapa_ativa"] = chave
+                st.rerun()
+
+
+def tipos_campanha_por_canal(canal: str) -> list[str]:
+    biblioteca = BIBLIOTECA_CAMPANHAS.get(canal, {})
+    return [campanha.get("tipo", "") for campanha in biblioteca.get("campanhas", []) if campanha.get("tipo")]
 
 
 def nivel_selector(
@@ -367,6 +379,25 @@ def nivel_selector(
         unsafe_allow_html=True,
     )
     return int(valor)
+
+
+def render_form_block_title(texto: str) -> None:
+    st.markdown(f'<div class="form-block-title">{texto}</div>', unsafe_allow_html=True)
+
+
+def coletar_funcionalidades_selecionadas() -> list[str]:
+    st.markdown('<div class="attr-card"><div class="attr-title">Funcionalidades</div></div>', unsafe_allow_html=True)
+    st.markdown(
+        '<div class="func-grid-note">Marque os itens presentes no empreendimento. O score considera a cesta completa e o peso de cada amenidade.</div>',
+        unsafe_allow_html=True,
+    )
+    selecionadas: list[str] = []
+    colunas = st.columns(2, gap="large")
+    for idx, item in enumerate(FUNCIONALIDADES_IMOBILIARIAS):
+        with colunas[idx % 2]:
+            if st.checkbox(item["label"], key=f"func_item_{item['id']}"):
+                selecionadas.append(item["id"])
+    return selecionadas
 
 
 def slider_com_descricao(
@@ -524,7 +555,7 @@ def render_tipos_campanha_sugeridos(canais: dict) -> None:
         return
 
     st.markdown("### Tipos de Campanha Sugeridos")
-    st.caption("Curadoria baseada nas bibliotecas oficiais de suporte da Meta e do Google Ads.")
+    st.caption("Leitura resumida dos formatos mais aderentes para os canais do cenário base.")
     cols = st.columns(len(canais_suportados))
     for col, canal in zip(cols, canais_suportados):
         biblioteca = BIBLIOTECA_CAMPANHAS[canal]
@@ -542,7 +573,6 @@ def render_tipos_campanha_sugeridos(canais: dict) -> None:
                 cor_borda=CORES_CANAIS.get(canal, CORES["borda"]),
                 icone="📚",
             )
-            st.link_button(f"Abrir suporte oficial de {biblioteca['fonte']}", biblioteca["fonte_url"])
 
 
 def calcular_qualidade_dados(dados_ibge: dict) -> tuple[str, str]:
@@ -610,7 +640,7 @@ def montar_breakdown_df(resultado_score: dict) -> pd.DataFrame:
                 "Peso": dados["peso"],
                 "Valor Normalizado": dados["valor_norm"],
                 "Contribuicao": dados["contribuicao"],
-                "Interpretacao": interpretar_variavel(variavel, dados["valor_norm"]),
+                "Interpretacao": dados.get("detalhe_exibicao") or interpretar_variavel(variavel, dados["valor_norm"]),
             }
         )
     return pd.DataFrame(linhas)
@@ -1149,11 +1179,9 @@ _LABELS_ATRIBUTOS = {
     "concorrencia": "Concorrencia",
     "localizacao": "Localizacao",
     "inovacao": "Inovacao do produto",
-    "tracao": "Tracão de demanda",
-    "funcionalidades": "Funcionalidades",
+    "tracao": "Tracao de demanda",
     "conexao_luxo": "Conexao com luxo",
 }
-
 
 def render_simulador(resultados: dict) -> None:
     """Recalcula o score em tempo real ao mover os sliders de atributos.
@@ -1187,7 +1215,7 @@ def render_simulador(resultados: dict) -> None:
 
         score_sim = calcular_score(
             dados_normalizados,
-            sim_atributos,
+            {**sim_atributos, "funcionalidades": atributos_orig.get("funcionalidades", [])},
             dados_bcb=dados_publicos.get("bcb"),
             dados_ipea=dados_publicos.get("ipea"),
             dados_trends=dados_publicos.get("trends"),
@@ -1289,10 +1317,6 @@ def render_tab_score(resultados: dict) -> None:
     fig.update_layout(paper_bgcolor=CORES["fundo"], plot_bgcolor=CORES["fundo"], height=440)
     st.plotly_chart(fig, use_container_width=True)
 
-    tabela = df_breakdown.copy()
-    tabela["Peso"] = tabela["Peso"].apply(lambda x: f"{x:.0%}")
-    st.dataframe(tabela, use_container_width=True, hide_index=True)
-
     st.markdown("### Top 3 fatores criticos")
     cols = st.columns(3)
     top3 = df_breakdown.sort_values("Contribuicao", ascending=False).head(3).to_dict("records")
@@ -1357,8 +1381,6 @@ def render_tab_cenarios(resultados: dict) -> None:
             f"{multiplicador:.1f}x sobre o benchmark nacional "
             f"({'capital SP/RJ' if multiplicador == 1.5 else 'capital estadual'})."
         )
-    df_tabela = montar_tabela_cenarios(resultados)
-    st.dataframe(df_tabela, use_container_width=True, hide_index=True)
     render_graficos_cenarios(cenarios)
 
 
@@ -1378,46 +1400,40 @@ def render_mix_cenario(nome_cenario: str, mix: dict) -> None:
                 "Canal": canal,
                 "%": dados["percentual"],
                 "Budget R$": dados["budget_r$"],
-                "CPL Est.": dados["cpl_estimado"],
-                "Leads Est.": dados["leads_estimados"],
-                "Taticas Principais": " | ".join(dados["taticas"]),
             }
             for canal, dados in canais.items()
         ]
     )
-    cols = st.columns([1, 1])
-    with cols[0]:
-        fig = px.pie(
-            df_mix,
-            names="Canal",
-            values="%",
-            color="Canal",
-            color_discrete_map=CORES_CANAIS,
-        )
-        fig.update_layout(
-            paper_bgcolor=CORES["fundo"],
-            plot_bgcolor=CORES["fundo"],
-            legend_title_text="Canais",
-            margin=dict(l=10, r=10, t=20, b=10),
-        )
-        st.plotly_chart(fig, use_container_width=True, key=f"mix_pizza_{nome_cenario}")
-    with cols[1]:
-        df_show = df_mix.copy()
-        df_show["%"] = df_show["%"].map(lambda x: f"{x:.1f}%")
-        df_show["Budget R$"] = df_show["Budget R$"].map(formatar_moeda)
-        df_show["CPL Est."] = df_show["CPL Est."].map(formatar_moeda)
-        df_show["Leads Est."] = df_show["Leads Est."].map(lambda x: f"{x:.0f}")
-        st.dataframe(df_show, use_container_width=True, hide_index=True)
+    fig = px.pie(
+        df_mix,
+        names="Canal",
+        values="%",
+        color="Canal",
+        color_discrete_map=CORES_CANAIS,
+    )
+    fig.update_layout(
+        paper_bgcolor=CORES["fundo"],
+        plot_bgcolor=CORES["fundo"],
+        legend_title_text="Canais",
+        margin=dict(l=10, r=10, t=20, b=10),
+    )
+    st.plotly_chart(fig, use_container_width=True, key=f"mix_pizza_{nome_cenario}")
+
     st.markdown("### Canais Prioritarios")
     cards = st.columns(2)
     for idx, (canal, dados) in enumerate(sorted(canais.items(), key=lambda item: item[1]["budget_r$"], reverse=True)):
         with cards[idx % 2]:
+            tipos = tipos_campanha_por_canal(canal)
+            tipos_html = ""
+            if tipos:
+                tipos_html = f"<p style='margin:0 0 8px 0;'><strong>Tipos de campanha:</strong> {', '.join(tipos)}</p>"
             conteudo = (
                 f"<p style='margin:0 0 8px 0;'><strong>Budget:</strong> {formatar_moeda(dados['budget_r$'])} "
                 f"({dados['percentual']:.1f}%)</p>"
                 f"<p style='margin:0 0 8px 0;'><strong>CPL:</strong> {formatar_moeda(dados['cpl_estimado'])} | "
                 f"<strong>Leads:</strong> {dados['leads_estimados']:.0f}</p>"
-                + "".join(f"<p style='margin:0 0 6px 0;'>• {tatica}</p>" for tatica in dados["taticas"])
+                + tipos_html
+                + "".join(f"<p style='margin:0 0 6px 0;'>- {tatica}</p>" for tatica in dados["taticas"])
             )
             card(canal, conteudo, cor_borda=dados["cor"], icone=dados["icone"])
 
@@ -1427,8 +1443,6 @@ def render_tab_mix(resultados: dict) -> None:
         "<p style='color:#6B7280;'>Cada aba mostra a distribuicao recomendada de budget, os canais lideres e o potencial de geracao de leads por cenario.</p>",
         unsafe_allow_html=True,
     )
-    render_bloco_interesse_busca(resultados["dados_publicos"]["trends"])
-    render_tipos_campanha_sugeridos(resultados["mix_midias"]["base"]["canais"])
     tab_cons, tab_base, tab_agr = st.tabs(["🔵 Conservador", "⚡ Base (Recomendado)", "🔴 Agressivo"])
     with tab_cons:
         render_mix_cenario("conservador", resultados["mix_midias"]["conservador"])
@@ -1664,17 +1678,11 @@ def render_tab_contexto_mercado(resultados: dict) -> None:
 def render_tab_ibge(resultados: dict) -> None:
     st.markdown("### Fontes de Dados Utilizadas")
     df_fontes = pd.DataFrame(FONTES_DE_DADOS)
-    df_fontes["gratuita"] = df_fontes["gratuita"].map(lambda x: "Sim" if x else "Nao")
-    df_fontes["requer_key"] = df_fontes["requer_key"].map(lambda x: "Sim" if x else "Nao")
-    col_f1, col_f2, col_f3 = st.columns(3)
+    df_fontes = df_fontes[["fonte", "uso_no_relatorio", "status_integracao"]].copy()
+    col_f1, col_f2 = st.columns(2)
     col_f1.metric("Fontes mapeadas", f"{len(df_fontes)}")
     col_f2.metric("Ativas agora", f"{(pd.DataFrame(FONTES_DE_DADOS)['status_integracao'].str.contains('Ativa')).sum()}")
-    col_f3.metric("Dependem de chave/conta", f"{(pd.DataFrame(FONTES_DE_DADOS)['requer_key']).sum()}")
     st.dataframe(df_fontes, use_container_width=True, hide_index=True)
-
-
-
-
 
 
 def render_dashboard(resultados: dict) -> None:
@@ -1737,8 +1745,6 @@ def render_dashboard_story(resultados: dict) -> None:
         "1. Resumo do caso",
         "Comece aqui: este bloco resume a situacao comercial do empreendimento e qual intensidade de investimento faz mais sentido como ponto de partida.",
     )
-    st.markdown("### Cenário Macroeconômico Atual")
-    render_contexto_macro_kpis(resultados)
     render_kpis(resultados)
     st.markdown(
         f"""
@@ -1840,7 +1846,7 @@ def main() -> None:
                   Preencha os dados do lancamento para gerar o relatorio completo
                 </div>
                 <div style="font-size:0.78rem;color:#6B7280;margin-top:2px;">
-                  Coleta automatica de 7 fontes publicas · Score 0–100 · Verba recomendada · Mix de midia · PDF executivo
+                  Score 0-100 | Verba recomendada | Mix de mídia | Dashboard executivo
                 </div>
               </div>
             </div>
@@ -1849,22 +1855,36 @@ def main() -> None:
         )
         col_left, col_right = st.columns([1, 1], gap="medium")
 
-        # ── Coluna esquerda: dados do empreendimento ──
         with col_left:
             with st.container(border=True):
-                st.markdown("### Identificação")
+                render_form_block_title("IDENTIFICAÇÃO")
                 nome_empreendimento = st.text_input(
                     "Nome do empreendimento",
                     placeholder="Ex: Vista Mar Residence",
                 )
                 tipologia = st.selectbox("Tipologia do produto", ["Lotes", "Apartamentos"])
+                valor_unidade = st.number_input(
+                    "Valor por unidade (R$)",
+                    min_value=50_000,
+                    step=10_000,
+                    value=650_000,
+                    help="Valor médio de venda de cada unidade.",
+                )
+                volume_unidades = st.number_input(
+                    "Número de unidades",
+                    min_value=1,
+                    max_value=5_000,
+                    step=1,
+                    value=120,
+                    help="Quantidade total de unidades a comercializar.",
+                )
 
-                st.markdown("### Localização")
+                render_form_block_title("LOCALIZAÇÃO")
                 cep = st.text_input(
                     "CEP",
                     placeholder="00000-000",
                     max_chars=9,
-                    help="Informe o CEP do terreno para geocodificação automática.",
+                    help="Informe o CEP do terreno para localizar o município e, quando houver confiança, rua e bairro.",
                 )
                 cidade_manual = st.text_input(
                     "Ou informe a cidade",
@@ -1882,35 +1902,18 @@ def main() -> None:
                     detalhe_str = " ".join(detalhes)
                     st.markdown(
                         f"""<div class="suggestion-card">
-                          <strong>Sugestão de localização:</strong> {sugestao['score_sugerido']}/5 - {sugestao['resumo']}
+                          <strong>Sugest?o de localiza??o:</strong> {sugestao['score_sugerido']}/5 - {sugestao['resumo']}
                           {(' ' + detalhe_str) if detalhe_str else ''}
                         </div>""",
                         unsafe_allow_html=True,
                     )
 
-                st.markdown("### Produto e Volume")
-                valor_unidade = st.number_input(
-                    "Valor por unidade (R$)",
-                    min_value=50_000,
-                    step=10_000,
-                    value=650_000,
-                    help="Valor médio de venda de cada unidade.",
-                )
-                volume_unidades = st.number_input(
-                    "Número de unidades",
-                    min_value=1,
-                    max_value=5_000,
-                    step=1,
-                    value=120,
-                    help="Quantidade total de unidades a comercializar.",
-                )
-
         with col_right:
             with st.container(border=True):
-                st.markdown("### Atributos do Produto")
-                st.caption("Avalie cada atributo de 1 (pior) a 5 (melhor). Atributos positivos reduzem o score de dificuldade.")
+                render_form_block_title("ATRIBUTOS")
+                st.caption("Avalie os atributos principais em escala de 1 a 5. Em funcionalidades, marque o pacote real do empreendimento para o score ficar mais aderente ao produto.")
 
-                r1_col1, r1_col2 = st.columns(2)
+                r1_col1, r1_col2 = st.columns(2, gap="large")
                 with r1_col1:
                     concorrencia = nivel_selector(
                         "Concorrência",
@@ -1930,7 +1933,7 @@ def main() -> None:
                         default=localizacao_default,
                     )
 
-                r2_col1, r2_col2 = st.columns(2)
+                r2_col1, r2_col2 = st.columns(2, gap="large")
                 with r2_col1:
                     inovacao = nivel_selector(
                         "Inovação",
@@ -1948,16 +1951,11 @@ def main() -> None:
                         "tracao",
                     )
 
-                r3_col1, r3_col2 = st.columns(2)
+
+                funcionalidades = coletar_funcionalidades_selecionadas()
+
+                r3_col1, r3_col2 = st.columns(2, gap="large")
                 with r3_col1:
-                    funcionalidades = nivel_selector(
-                        "Funcionalidades",
-                        "Lazer, tecnologia, sustentabilidade e acabamento",
-                        "Básico",
-                        "Completo",
-                        "funcionalidades",
-                    )
-                with r3_col2:
                     conexao_luxo = nivel_selector(
                         "Posicionamento",
                         "Alinhamento com segmento premium ou aspiracional",
@@ -1965,6 +1963,8 @@ def main() -> None:
                         "Premium",
                         "conexao_luxo",
                     )
+                with r3_col2:
+                    st.markdown("<div style='height:8px;'></div>", unsafe_allow_html=True)
 
                 st.caption("Ao calcular, você concorda com os Termos de Uso.")
                 calcular = st.button("Calcular Score e Gerar Relatório", type="primary", use_container_width=True)
@@ -2015,14 +2015,46 @@ def main() -> None:
 
     if etapa_ativa == "2. Processamento":
         if "resultados" in st.session_state:
+            resultados = st.session_state["resultados"]
             st.markdown("## Processamento")
-            st.json(
-                {
-                    "municipio": st.session_state["resultados"]["localizacao"]["municipio"],
-                    "codigo_ibge": st.session_state["resultados"]["localizacao"]["codigo_ibge"],
-                    "score": st.session_state["resultados"]["resultado_score"]["score_final"],
-                    "confiabilidade": st.session_state["resultados"]["qualidade_dados"]["texto"],
-                }
+            st.caption("Resumo do que foi carregado para montar o dashboard.")
+
+            col1, col2, col3, col4 = st.columns(4)
+            col1.metric("Município", resultados["localizacao"]["municipio"])
+            col2.metric("Código IBGE", resultados["localizacao"]["codigo_ibge"])
+            col3.metric("Score", f"{resultados['resultado_score']['score_final']}/100")
+            col4.metric("Verba base", formatar_moeda(resultados["resultado_verba"]["cenarios"]["base"]["verba_r$"]))
+
+            st.markdown("### Dados carregados")
+            dados_publicos = resultados["dados_publicos"]
+            blocos = [
+                ("IBGE", "Indicadores municipais e normalização", True),
+                ("BCB", "Crédito, inflação e contexto macro", bool(dados_publicos.get("bcb"))),
+                ("Ipea", "Indicadores econômicos complementares", bool(dados_publicos.get("ipea"))),
+                ("Google Trends", "Demanda digital e interesse de busca", bool(dados_publicos.get("trends"))),
+                ("FipeZap", "Preço e variação local de mercado", bool(dados_publicos.get("fipezap"))),
+                ("RIB", "Liquidez e registros imobiliários", bool(dados_publicos.get("rib"))),
+                ("Público-alvo", "Perfil, objeções e mensagem-chave", bool(resultados.get("perfil_publico"))),
+                ("Mix de mídia", "Distribuição de verba por canal", bool(resultados.get("mix_midias"))),
+            ]
+            for titulo, descricao, disponivel in blocos:
+                status = "Carregado" if disponivel else "Não disponível"
+                st.markdown(f"- **{titulo}**: {status} — {descricao}")
+
+            funcionalidades_resumo = resultados["resultado_score"]["breakdown"].get("funcionalidades", {})
+            itens_funcionalidades = funcionalidades_resumo.get("itens", [])
+            st.markdown("### Pacote do produto")
+            if itens_funcionalidades:
+                st.markdown(f"- Funcionalidades marcadas: **{', ' .join(itens_funcionalidades)}**")
+                st.markdown(f"- Cobertura ponderada: **{funcionalidades_resumo.get('cobertura', 0):.0%}**")
+            else:
+                st.markdown("- Funcionalidades marcadas: **Nenhuma informada**")
+
+            st.markdown("### Localização identificada")
+            st.markdown(
+                f"- Município: **{resultados['localizacao']['municipio']} - {resultados['localizacao']['uf']}**\n"
+                f"- Bairro: **{resultados['localizacao'].get('bairro') or 'Não identificado'}**\n"
+                f"- Referência: **{resultados['localizacao'].get('rua') or 'Não identificada'}**"
             )
         else:
             st.info("Preencha os dados na primeira etapa para iniciar o processamento.")
