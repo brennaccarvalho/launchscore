@@ -1,0 +1,13 @@
+services:
+  launchscore:
+    build: .
+    ports:
+      - "8501:8501"
+    environment:
+      - PORTAL_TRANSPARENCIA_KEY=${PORTAL_TRANSPARENCIA_KEY:-}
+    volumes:
+      - downloads_cache:/app/data/_downloads
+    restart: unless-stopped
+
+volumes:
+  downloads_cache:

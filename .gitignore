@@ -3,7 +3,7 @@ __pycache__/
 *.log
 .pytest_cache/
 pytest-cache-files-*/
-.streamlit/
+.streamlit/secrets.toml
 .claude/
 .venv/
 venv/

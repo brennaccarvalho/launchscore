@@ -84,3 +84,31 @@ O README tecnico interno da metodologia foi separado do README publico para pres
 ## License
 
 This software is proprietary and part of a SaaS platform. Unauthorized use, copying, modification, reverse engineering, or competitive usage is strictly prohibited. See the LICENSE file for full terms.
+
+## Rodando com Docker
+
+### Pré-requisitos
+- [Docker](https://docs.docker.com/get-docker/) instalado
+- [Docker Compose](https://docs.docker.com/compose/install/) (incluído no Docker Desktop)
+
+### Subindo a aplicação
+
+```bash
+docker compose up
+```
+
+### Variáveis de ambiente (opcional)
+
+Copie o arquivo de exemplo e configure sua chave de API:
+
+```bash
+cp .env.example .env
+# Edite .env e preencha PORTAL_TRANSPARENCIA_KEY se necessário
+```
+
+### Rodando manualmente (sem Compose)
+
+```bash
+docker build -t launchscore .
+docker run -p 8501:8501 launchscore
+```
